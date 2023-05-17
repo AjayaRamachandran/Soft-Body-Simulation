@@ -24,7 +24,7 @@ restingDistanceTable = []
 
 gravity = (0, 0.03)
 #restingDistance = 10
-elasticity = 0.5
+elasticity = 0.8
 
 fps = 60
 clock = pygame.time.Clock()
@@ -130,6 +130,8 @@ def transformPoint(point, connectedPoints, resting): # applies transformations t
         positionTuple[1] = 117
     #if point < 10:
         #positionTuple[1] = 0
+        #velocityTuple[0] = 0
+        #velocityTuple[1] = 0
     
     nextVelocityLibrary[point] = tuple(velocityTuple)
     nextPositionLibrary[point] = tuple(positionTuple)
