@@ -4,6 +4,7 @@ import pygame
 import random
 import time
 from math import *
+import numpy as np
 import copy
 
 
@@ -15,12 +16,15 @@ windowSize = (1280, 720)
 pygame.display.set_caption("Soft Body Simulation") # Sets title of window
 screen = pygame.display.set_mode(windowSize) # Sets the dimensions of the window to the windowSize
 
+#font = pygame.font.Font(None, 36)
+
 positionLibrary = [] # bank of positions of all the points
 nextPositionLibrary = [] # buffer of the next frame's point positions
 velocityLibrary = [] # bank of velocities of all the points
 nextVelocityLibrary = [] # buffer of the next frame's point velocities
 edgeTable = [] # bank of all edges, stored as pairs of point indices
 restingDistanceTable = [] # reference table of all the resting distances of the edges
+ecofTable = [] # bank of all edges' elastic coefficients
 
 gravity = (0, 0.03)
 #restingDistance = 10
@@ -46,17 +50,19 @@ def addTuplesAsVectors(listOfTuples): # function for adding all tuples in a list
     for item in range(len(listOfTuples)):
         yVec = yVec + listOfTuples[item][1]
 
-    xVec = xVec/len(listOfTuples)
-    yVec = yVec/len(listOfTuples)
+    if len(listOfTuples) != 0:
+        xVec = xVec/len(listOfTuples)
+        yVec = yVec/len(listOfTuples)
     return(xVec,yVec)
 
 def primeLists(): # readies the libraries with points to begin the simulation
     for y in range(10):
         for x in range(10):
-            positionLibrary.append((x*10,y*10)) # appends a position on the screen
+            positionLibrary.append((x*10, y*10)) # appends a position on the screen
+            #positionLibrary.append((random.randint(0,100), random.randint(0,100)))
     for y in range(10):
         for x in range(10):
-            nextPositionLibrary.append((x*10,y*10))
+            nextPositionLibrary.append((x*10, y*10))
     for item in range(100):
             velocityLibrary.append((0,0)) # appends a null vector (not moving at the start)
     for item in range(100):
@@ -79,6 +85,9 @@ def createEdgeTable():
             if not ((thisLinks[link]), item) in edgeTable:
                 if not (item, (thisLinks[link])) in edgeTable:
                     edgeTable.append((item, thisLinks[link]))
+    
+        for item in range(100):
+            ecofTable.append(0) # appends a zero coefficient
 
 def createRestingDistanceTable(): # calculates resting distances from initial point positions
     for item in range(len(edgeTable)):
@@ -107,7 +116,7 @@ def transformPoint(point, connectedPoints, resting): # applies transformations t
 
     elasticVectors = []
     for linkedPoint in range(len(connectedPoints)):
-        elasticCoefficient = (dist(positionLibrary[connectedPoints[linkedPoint]], positionLibrary[point]) - restingDistanceTable[resting[linkedPoint]]) * (1 / elasticity) # behold, the elastic function
+        elasticCoefficient = ((dist(positionLibrary[connectedPoints[linkedPoint]], positionLibrary[point])) - restingDistanceTable[resting[linkedPoint]]) * (1 / elasticity) # behold, the elastic function
 
         # the above function is based on the Wikipedia article on Hooke's Law: https://en.wikipedia.org/wiki/Hooke%27s_law which states,
         # "In physics, Hooke's law is an empirical law which states that the force (F) needed to extend or compress a spring by some distance (x) scales linearly with respect to that distance"
@@ -127,8 +136,8 @@ def transformPoint(point, connectedPoints, resting): # applies transformations t
     positionTuple = list(positionLibrary[point]) # tuples are immutable
     positionTuple[0] = positionTuple[0] + (velocityTuple[0])
     positionTuple[1] = positionTuple[1] + (velocityTuple[1])
-    if positionTuple[1] > 117: # floor
-        positionTuple[1] = 117
+    if positionTuple[1] > 117:#- positionTuple[0]/2.5: # floor
+        positionTuple[1] = 117# - positionTuple[0]/2.5
     #if point < 10: # attachment point
         #positionTuple[1] = 0
         #velocityTuple[0] = 0
@@ -171,11 +180,18 @@ while running:
         localX2 = positionLibrary[edgeTable[edge][1]][0]
         localY2 = positionLibrary[edgeTable[edge][1]][1]
 
+        localECof = (dist((localX1, localY1), (localX2, localY2)) - restingDistanceTable[edge]) * (1 / elasticity) # behold, the elastic function again
+        ecofTable[edge] = localECof
+        #avgECof = sum(ecofTable) / len(ecofTable)
 
-        pygame.draw.aaline(screen, (100,100,100), (localX1 * 5 + 415,localY1*5 + 135), (localX2 * 5 + 415,localY2*5 + 135), 5)
+        pygame.draw.aaline(screen, ((510/(1+exp(0.5 * ((localECof -0.8) - 0.5)**2))),(510/(1+exp(0.5 * ((sqrt(abs(localECof))))**2))),(510/(1+exp(0.5 * ((0 - localECof - 0.8) - 0.5)**2)))), (localX1 * 5 + 415,localY1*5 + 135), (localX2 * 5 + 415,localY2*5 + 135), 5)
 
     positionLibrary = copy.deepcopy(nextPositionLibrary) # cascades next frame into current frame
     velocityLibrary = copy.deepcopy(nextVelocityLibrary)
+
+    #text = font.render("avgECof: " + str((round(avgECof*1000000))/1000), True, (255, 255, 255))
+    #text_rect = text.get_rect()
+    #screen.blit(text, text_rect)
 
     for event in pygame.event.get(): # checks if program is quit, if so stops the code
         if event.type == pygame.QUIT:
