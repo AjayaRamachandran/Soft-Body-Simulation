@@ -12,15 +12,15 @@ pygame.init()
 
 windowSize = (1280, 720)
 
-pygame.display.set_caption("Mesh") # Sets title of window
+pygame.display.set_caption("Soft Body Simulation") # Sets title of window
 screen = pygame.display.set_mode(windowSize) # Sets the dimensions of the window to the windowSize
 
-positionLibrary = []
-nextPositionLibrary = []
-velocityLibrary = []
-nextVelocityLibrary = []
-edgeTable = []
-restingDistanceTable = []
+positionLibrary = [] # bank of positions of all the points
+nextPositionLibrary = [] # buffer of the next frame's point positions
+velocityLibrary = [] # bank of velocities of all the points
+nextVelocityLibrary = [] # buffer of the next frame's point velocities
+edgeTable = [] # bank of all edges, stored as pairs of point indices
+restingDistanceTable = [] # reference table of all the resting distances of the edges
 
 gravity = (0, 0.03)
 #restingDistance = 10
@@ -37,7 +37,7 @@ def dist(point1, point2): # abstracted distance function
 def dirTo(point1, point2): # abstracted direction function
     return atan2((point2[1] - point1[1]), (point2[0] - point1[0]))
 
-def addTuplesAsVectors(listOfTuples):
+def addTuplesAsVectors(listOfTuples): # function for adding all tuples in a list as vectors
     xVec = 0
     for item in range(len(listOfTuples)):
         xVec = xVec + listOfTuples[item][0]
@@ -60,7 +60,7 @@ def primeLists(): # readies the libraries with points to begin the simulation
     for item in range(100):
             velocityLibrary.append((0,0)) # appends a null vector (not moving at the start)
     for item in range(100):
-            nextVelocityLibrary.append((0,0)) # appends a null vector (not moving at the start)
+            nextVelocityLibrary.append((0,0)) # appends a null vector
 
 def createEdgeTable():
     # This script is extremely inefficient, looping every vertex for every other vertex (time complexity: n^2 where n is 100)
@@ -70,7 +70,7 @@ def createEdgeTable():
         thisPos = positionLibrary[item]
 
         thisLinks = []
-        for otherItem in range(len(positionLibrary)): # loops through every item in the library for each item, checking if they are within 10 px
+        for otherItem in range(len(positionLibrary)): # loops through every item in the library for each item, checking if they are within 15 px
             otherPos = positionLibrary[otherItem]
             if dist(otherPos, thisPos) <= 15 and not otherPos == thisPos:
                 thisLinks.append(otherItem) # if the point is close enough, it is added to the list of linked points
@@ -80,11 +80,11 @@ def createEdgeTable():
                 if not (item, (thisLinks[link])) in edgeTable:
                     edgeTable.append((item, thisLinks[link]))
 
-def createRestingDistanceTable():
+def createRestingDistanceTable(): # calculates resting distances from initial point positions
     for item in range(len(edgeTable)):
         restingDistanceTable.append(dist(positionLibrary[edgeTable[item][0]],positionLibrary[edgeTable[item][1]]))
 
-def findConnectedFromEdgeTable(point):
+def findConnectedFromEdgeTable(point): # takes a point index and returns all points connected
     connected = []
     for item in range(len(edgeTable)): # loops through all edges in edge table
         if point in edgeTable[item]: # if the point in question is in the inspected edge,
@@ -95,7 +95,7 @@ def findConnectedFromEdgeTable(point):
 
     return connected
 
-def findRestingDistances(point):
+def findRestingDistances(point): # takes a point and returns the resting distances of all connected points
     restingDistances = []
     for item in range(len(edgeTable)):
         if point in edgeTable[item]:
@@ -114,26 +114,27 @@ def transformPoint(point, connectedPoints, resting): # applies transformations t
 
         dirToPoint = dirTo(positionLibrary[point], positionLibrary[connectedPoints[linkedPoint]]) # swap if not working
         elasticVector = (elasticCoefficient * cos(dirToPoint), elasticCoefficient * sin(dirToPoint))
+        # above is a trig function that takes a direction and magnitude and converts it to an (x,y) vector
         elasticVectors.append(elasticVector)
     
-    newTransformVector = addTuplesAsVectors(elasticVectors)
+    newTransformVector = addTuplesAsVectors(elasticVectors) # takes all acting elastic forces as vectors and adds them (net force)
 
-    velocityTuple = list(velocityLibrary[point])
+    velocityTuple = list(velocityLibrary[point]) # tuples are immutable
     velocityTuple[0] = velocityTuple[0]*0.99 + newTransformVector[0] + gravity[0] #+ (random.randint(-100,100))/2000
     velocityTuple[1] = velocityTuple[1]*0.99 + newTransformVector[1] + gravity[1] #+ (random.randint(-100,100))/2000
 
 
-    positionTuple = list(positionLibrary[point])
+    positionTuple = list(positionLibrary[point]) # tuples are immutable
     positionTuple[0] = positionTuple[0] + (velocityTuple[0])
     positionTuple[1] = positionTuple[1] + (velocityTuple[1])
-    if positionTuple[1] > 117:
+    if positionTuple[1] > 117: # floor
         positionTuple[1] = 117
-    #if point < 10:
+    #if point < 10: # attachment point
         #positionTuple[1] = 0
         #velocityTuple[0] = 0
         #velocityTuple[1] = 0
     
-    nextVelocityLibrary[point] = tuple(velocityTuple)
+    nextVelocityLibrary[point] = tuple(velocityTuple) # adds transformations to next frame
     nextPositionLibrary[point] = tuple(positionTuple)
 
 
@@ -173,16 +174,16 @@ while running:
 
         pygame.draw.aaline(screen, (100,100,100), (localX1 * 5 + 415,localY1*5 + 135), (localX2 * 5 + 415,localY2*5 + 135), 5)
 
-    positionLibrary = copy.deepcopy(nextPositionLibrary)
+    positionLibrary = copy.deepcopy(nextPositionLibrary) # cascades next frame into current frame
     velocityLibrary = copy.deepcopy(nextVelocityLibrary)
 
-    for event in pygame.event.get(): # Checks if program is quit, if so stops the code
+    for event in pygame.event.get(): # checks if program is quit, if so stops the code
         if event.type == pygame.QUIT:
             running = False
     # runs framerate wait time
     clock.tick(fps)
-    # Update the screen
+    # update the screen
     pygame.display.update()
 
-# Quit Pygame
+# quit Pygame
 pygame.quit()
