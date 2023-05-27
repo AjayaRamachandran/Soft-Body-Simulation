@@ -18,6 +18,8 @@ screen = pygame.display.set_mode(windowSize) # Sets the dimensions of the window
 
 #font = pygame.font.Font(None, 36)
 
+###### INITIALIZE ######
+# Jelly
 positionLibrary = [] # bank of positions of all the points
 nextPositionLibrary = [] # buffer of the next frame's point positions
 velocityLibrary = [] # bank of velocities of all the points
@@ -26,9 +28,20 @@ edgeTable = [] # bank of all edges, stored as pairs of point indices
 restingDistanceTable = [] # reference table of all the resting distances of the edges
 ecofTable = [] # bank of all edges' elastic coefficients
 
-gravity = (0, 0.03)
+# Environment
+lineLibrary = [] # list of quad-tuples that creates the shape of the ground, format = (x1, y1, x2, y2)
+
+###### VARIABLES ######
+gravity = (0, 0.15)
 #restingDistance = 10
-elasticity = 0.8
+
+# elasticity = 0.5
+simResolution = 10
+trueElasticity = 0.5
+dampening = 0.98
+
+# test ground state
+lineLibrary.append(())
 
 fps = 60
 clock = pygame.time.Clock()
@@ -56,16 +69,16 @@ def addTuplesAsVectors(listOfTuples): # function for adding all tuples in a list
     return(xVec,yVec)
 
 def primeLists(): # readies the libraries with points to begin the simulation
-    for y in range(10):
-        for x in range(10):
-            positionLibrary.append((x*10, y*10)) # appends a position on the screen
+    for y in range(simResolution):
+        for x in range(simResolution):
+            positionLibrary.append((x*(500 / simResolution) + 415, y*(500 / simResolution) + 135)) # appends a position on the screen
             #positionLibrary.append((random.randint(0,100), random.randint(0,100)))
-    for y in range(10):
-        for x in range(10):
-            nextPositionLibrary.append((x*10, y*10))
-    for item in range(100):
+    for y in range(simResolution):
+        for x in range(simResolution):
+            nextPositionLibrary.append((x*(500 / simResolution) + 415, y*(500 / simResolution) + 135))
+    for item in range(simResolution ** 2):
             velocityLibrary.append((0,0)) # appends a null vector (not moving at the start)
-    for item in range(100):
+    for item in range(simResolution ** 2):
             nextVelocityLibrary.append((0,0)) # appends a null vector
 
 def createEdgeTable():
@@ -78,7 +91,7 @@ def createEdgeTable():
         thisLinks = []
         for otherItem in range(len(positionLibrary)): # loops through every item in the library for each item, checking if they are within 15 px
             otherPos = positionLibrary[otherItem]
-            if dist(otherPos, thisPos) <= 15 and not otherPos == thisPos:
+            if dist(otherPos, thisPos) <= (ceil(750 / simResolution)) and not otherPos == thisPos:
                 thisLinks.append(otherItem) # if the point is close enough, it is added to the list of linked points
         
         for link in range(len(thisLinks)): # finally, all linked points are added as edges (tuples of two points) to the edge table
@@ -116,7 +129,7 @@ def transformPoint(point, connectedPoints, resting): # applies transformations t
 
     elasticVectors = []
     for linkedPoint in range(len(connectedPoints)):
-        elasticCoefficient = ((dist(positionLibrary[connectedPoints[linkedPoint]], positionLibrary[point])) - restingDistanceTable[resting[linkedPoint]]) * (1 / elasticity) # behold, the elastic function
+        elasticCoefficient = ((dist(positionLibrary[connectedPoints[linkedPoint]], positionLibrary[point])) - restingDistanceTable[resting[linkedPoint]]) * (1 / trueElasticity) # behold, the elastic function
 
         # the above function is based on the Wikipedia article on Hooke's Law: https://en.wikipedia.org/wiki/Hooke%27s_law which states,
         # "In physics, Hooke's law is an empirical law which states that the force (F) needed to extend or compress a spring by some distance (x) scales linearly with respect to that distance"
@@ -129,15 +142,15 @@ def transformPoint(point, connectedPoints, resting): # applies transformations t
     newTransformVector = addTuplesAsVectors(elasticVectors) # takes all acting elastic forces as vectors and adds them (net force)
 
     velocityTuple = list(velocityLibrary[point]) # tuples are immutable
-    velocityTuple[0] = velocityTuple[0]*0.99 + newTransformVector[0] + gravity[0] #+ (random.randint(-100,100))/2000
-    velocityTuple[1] = velocityTuple[1]*0.99 + newTransformVector[1] + gravity[1] #+ (random.randint(-100,100))/2000
+    velocityTuple[0] = velocityTuple[0]*dampening + newTransformVector[0] + gravity[0] #+ (random.randint(-100,100))/2000
+    velocityTuple[1] = velocityTuple[1]*dampening + newTransformVector[1] + gravity[1] #+ (random.randint(-100,100))/2000
 
 
     positionTuple = list(positionLibrary[point]) # tuples are immutable
     positionTuple[0] = positionTuple[0] + (velocityTuple[0])
     positionTuple[1] = positionTuple[1] + (velocityTuple[1])
-    if positionTuple[1] > 117:#- positionTuple[0]/2.5: # floor
-        positionTuple[1] = 117# - positionTuple[0]/2.5
+    if positionTuple[1] > 720:#- positionTuple[0]/2.5: # floor
+        positionTuple[1] = 720# - positionTuple[0]/2.5
     #if point < 10: # attachment point
         #positionTuple[1] = 0
         #velocityTuple[0] = 0
@@ -168,7 +181,7 @@ while running:
         transformPoint(pt, connected, restingDistances)
 
 
-        pygame.draw.circle(screen, (255,255,255), (localX * 5 + 415,localY*5 + 135), 5)
+        pygame.draw.circle(screen, (255,255,255), (localX, localY), 5)
         #pygame.draw.line(screen, (255,255,0), (640,0), (640,720), 3) # Guiding Line 1
         #pygame.draw.line(screen, (255,255,0), (0,360), (1280,360), 3) # Guiding Line 2
 
@@ -180,11 +193,12 @@ while running:
         localX2 = positionLibrary[edgeTable[edge][1]][0]
         localY2 = positionLibrary[edgeTable[edge][1]][1]
 
-        localECof = (dist((localX1, localY1), (localX2, localY2)) - restingDistanceTable[edge]) * (1 / elasticity) # behold, the elastic function again
+        localECof = (dist((localX1, localY1), (localX2, localY2)) - restingDistanceTable[edge]) * (1 / trueElasticity) # behold, the elastic function again
         ecofTable[edge] = localECof
         #avgECof = sum(ecofTable) / len(ecofTable)
 
-        pygame.draw.aaline(screen, ((510/(1+exp(0.5 * ((localECof -0.8) - 0.5)**2))),(510/(1+exp(0.5 * ((sqrt(abs(localECof))))**2))),(510/(1+exp(0.5 * ((0 - localECof - 0.8) - 0.5)**2)))), (localX1 * 5 + 415,localY1*5 + 135), (localX2 * 5 + 415,localY2*5 + 135), 5)
+        #pygame.draw.aaline(screen, ((510/(1+exp(0.5 * ((localECof -0.8) - 0.5)**2))),(510/(1+exp(0.5 * ((sqrt(abs(localECof))))**2))),(510/(1+exp(0.5 * ((0 - localECof - 0.8) - 0.5)**2)))), (localX1 ,localY1), (localX2 ,localY2), 5)
+        pygame.draw.aaline(screen, (255, 255, 255), (localX1 ,localY1), (localX2 ,localY2), 5)
 
     positionLibrary = copy.deepcopy(nextPositionLibrary) # cascades next frame into current frame
     velocityLibrary = copy.deepcopy(nextVelocityLibrary)
