@@ -46,7 +46,10 @@ dampening = 0.99
 scale = 500
 
 # test ground state
-lineLibrary.append((0, 720, 1280, 600))
+
+lineLibrary.append((0, 600, 1280, 720))
+#lineLibrary.append((0, 720, 1280, 600))
+
 
 fps = 60
 clock = pygame.time.Clock()
@@ -89,7 +92,7 @@ def primeLists(): # readies the libraries with points to begin the simulation
             nextVelocityLibrary.append((0,0)) # appends a null vector
 
     for i in range(len(lineLibrary)): # generates a sample buffer that is the length of the line library, which allows each point to store its status with every line
-        sampleBuffer.append(False)
+        sampleBuffer.append(True)
 
     for i in range(simResolution ** 2):
         pointSignsLibrary.append(copy.deepcopy(sampleBuffer))
@@ -165,8 +168,9 @@ def lineCollisions():
     for line in lineLibrary: # loops through every line
         pt = 0
         for point in positionLibrary: # loops through every point
-            if pointSignsLibrary[pt][ln] != side(point, line, normalsLibrary[ln]):
-                passedPoints.append((pt,ln))
+            if point[0] > line[0] and point[0] < line[2]:
+                if pointSignsLibrary[pt][ln] != side(point, line, normalsLibrary[ln]):
+                    passedPoints.append((pt,ln))
             pointSignsLibrary[pt][ln] = side(point, line, normalsLibrary[ln])
             
             pt += 1
@@ -191,16 +195,40 @@ def transformPoint(point, connectedPoints, resting): # applies transformations t
     newTransformVector = addTuplesAsVectors(elasticVectors) # takes all acting elastic forces as vectors and adds them (net force)
 
     velocityTuple = list(velocityLibrary[point]) # tuples are immutable
-    velocityTuple[0] = velocityTuple[0]*dampening + newTransformVector[0] + gravity[0] #+ (random.randint(-100,100))/2000
-    velocityTuple[1] = velocityTuple[1]*dampening + newTransformVector[1] + gravity[1] #+ (random.randint(-100,100))/2000
+    velocityTuple[0] = velocityTuple[0]*dampening + newTransformVector[0]*1 + gravity[0] #+ (random.randint(-100,100))/2000
+    velocityTuple[1] = velocityTuple[1]*dampening + newTransformVector[1]*1 + gravity[1] #+ (random.randint(-100,100))/2000
 
 
     positionTuple = list(positionLibrary[point]) # tuples are immutable
     positionTuple[0] = positionTuple[0] + (velocityTuple[0])
     positionTuple[1] = positionTuple[1] + (velocityTuple[1])
-    if positionTuple[1] > 720:#- positionTuple[0]/2.5: # floor
-        positionTuple[1] = 720# - positionTuple[0]/2.5
-        velocityTuple[1] = 0
+
+    for line in range(len(lineLibrary)):
+        if (point,line) in passedPoints:
+            
+            liq = lineLibrary[line]
+            rise = liq[3] - liq[1]
+            run = liq[2] - liq[0]
+            hyp = dist((liq[0],liq[1]),(liq[2],liq[3]))
+
+            #velocityTuple[1] = 0
+            #velocityTuple[1] = velocityTuple[1] * - 0.9
+            #velocityTuple[0] += (rise/hyp)*(run/hyp)
+            #velocityTuple[1] += (rise/hyp)*(rise/hyp)
+            positionTuple[1] = liq[1] + (((positionTuple[0] - liq[0]) / (liq[2] - liq[0])) * (liq[3] - liq[1])) - 1
+            #velocityTuple[1] = 0
+            
+
+            
+            #positionTuple[0] += velocityTuple[0]
+            momentum = dist((0,velocityTuple[0]),(0,velocityTuple[1]))
+            velocityTuple[1] = 0
+            velocityTuple[1] += (rise/hyp)*(rise/hyp)*momentum#*0.99
+            velocityTuple[0] += (rise/hyp)*(run/hyp)*momentum#*0.99
+
+    #if positionTuple[1] > 720:#- positionTuple[0]/2.5: # floor
+        #positionTuple[1] = 720# - positionTuple[0]/2.5
+        #velocityTuple[1] = 0
     #if point < 10: # attachment point
         #positionTuple[1] = 0
         #velocityTuple[0] = 0
@@ -232,10 +260,11 @@ while running:
         transformPoint(pt, connected, restingDistances)
         
         for ln in range(len(lineLibrary)):
-            if (pt,ln) in passedPoints:
-                pygame.draw.circle(screen, (255,0,0), (localX, localY), 15)
-            else:
-                pygame.draw.circle(screen, (255,255,255), (localX, localY), 5)
+            pygame.draw.circle(screen, (255,255,255), (localX, localY), 5)
+            #if (pt,ln) in passedPoints:
+            #    pygame.draw.circle(screen, (255,0,0), (localX, localY), 15)
+            #else:
+            #    pygame.draw.circle(screen, (255,255,255), (localX, localY), 5)
         #pygame.draw.line(screen, (255,255,0), (640,0), (640,720), 3) # Guiding Line 1
         #pygame.draw.line(screen, (255,255,0), (0,360), (1280,360), 3) # Guiding Line 2
 
