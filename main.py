@@ -38,10 +38,11 @@ gravity = (0, 0.15)
 # elasticity = 0.5
 simResolution = 10
 trueElasticity = 0.5
-dampening = 0.98
+dampening = 0.99
+scale = 500
 
 # test ground state
-lineLibrary.append(())
+lineLibrary.append((0, 720, 1280, 600))
 
 fps = 60
 clock = pygame.time.Clock()
@@ -71,11 +72,11 @@ def addTuplesAsVectors(listOfTuples): # function for adding all tuples in a list
 def primeLists(): # readies the libraries with points to begin the simulation
     for y in range(simResolution):
         for x in range(simResolution):
-            positionLibrary.append((x*(500 / simResolution) + 415, y*(500 / simResolution) + 135)) # appends a position on the screen
+            positionLibrary.append((x*(500 / simResolution) + (640 - (simResolution - 1) / 2 * (scale / simResolution)), y*(500 / simResolution) + (360 - (simResolution - 1) / 2 * (scale / simResolution)))) # appends a position on the screen
             #positionLibrary.append((random.randint(0,100), random.randint(0,100)))
     for y in range(simResolution):
         for x in range(simResolution):
-            nextPositionLibrary.append((x*(500 / simResolution) + 415, y*(500 / simResolution) + 135))
+            nextPositionLibrary.append((x*(500 / simResolution) + (640 - (simResolution - 1) / 2 * (scale / simResolution)), y*(500 / simResolution) + (360 - (simResolution - 1) / 2 * (scale / simResolution))))
     for item in range(simResolution ** 2):
             velocityLibrary.append((0,0)) # appends a null vector (not moving at the start)
     for item in range(simResolution ** 2):
@@ -125,17 +126,41 @@ def findRestingDistances(point): # takes a point and returns the resting distanc
     
     return restingDistances
 
+def side(point, line, flipNormal): # takes a point and the coordinates of the line and checks to see if the point is in the bounding box of the line
+    pointX = point[0]
+    pointY = point[1]
+
+    lineX1 = line[0]
+    lineY1 = line[1]
+    lineX2 = line[2]
+    lineY2 = line[3]
+
+    vectorAB = (lineX2 - lineX1, lineY2 - lineY1)
+    vectorAP = (pointX - lineX1, pointY - lineY1)
+    crossProduct = vectorAB[0] * vectorAP[1] - vectorAB[1] * vectorAP[0]
+    crossProductIsPos = bool(crossProduct > 0)
+
+    if crossProductIsPos ^ flipNormal < 0: # if the cross product of the vectors AP and AB is less than 0, the point is on the same side as the assumed normal vector, which can be flipped
+        return 1 # front (on the same side as normal vector)
+    else:
+        return 0 # back (on opposite side of normal vector)
+
+def lineCollisions():
+    for line in lineLibrary:
+        for point in positionLibrary:
+
+
 def transformPoint(point, connectedPoints, resting): # applies transformations to the point location based on inputted data
 
     elasticVectors = []
     for linkedPoint in range(len(connectedPoints)):
-        elasticCoefficient = ((dist(positionLibrary[connectedPoints[linkedPoint]], positionLibrary[point])) - restingDistanceTable[resting[linkedPoint]]) * (1 / trueElasticity) # behold, the elastic function
+        ecof = ((dist(positionLibrary[connectedPoints[linkedPoint]], positionLibrary[point])) - restingDistanceTable[resting[linkedPoint]]) * (1 / trueElasticity) # behold, the elastic function
 
         # the above function is based on the Wikipedia article on Hooke's Law: https://en.wikipedia.org/wiki/Hooke%27s_law which states,
         # "In physics, Hooke's law is an empirical law which states that the force (F) needed to extend or compress a spring by some distance (x) scales linearly with respect to that distance"
 
         dirToPoint = dirTo(positionLibrary[point], positionLibrary[connectedPoints[linkedPoint]]) # swap if not working
-        elasticVector = (elasticCoefficient * cos(dirToPoint), elasticCoefficient * sin(dirToPoint))
+        elasticVector = (ecof * cos(dirToPoint), ecof * sin(dirToPoint))
         # above is a trig function that takes a direction and magnitude and converts it to an (x,y) vector
         elasticVectors.append(elasticVector)
     
@@ -151,6 +176,7 @@ def transformPoint(point, connectedPoints, resting): # applies transformations t
     positionTuple[1] = positionTuple[1] + (velocityTuple[1])
     if positionTuple[1] > 720:#- positionTuple[0]/2.5: # floor
         positionTuple[1] = 720# - positionTuple[0]/2.5
+        velocityTuple[1] = 0
     #if point < 10: # attachment point
         #positionTuple[1] = 0
         #velocityTuple[0] = 0
@@ -199,6 +225,16 @@ while running:
 
         #pygame.draw.aaline(screen, ((510/(1+exp(0.5 * ((localECof -0.8) - 0.5)**2))),(510/(1+exp(0.5 * ((sqrt(abs(localECof))))**2))),(510/(1+exp(0.5 * ((0 - localECof - 0.8) - 0.5)**2)))), (localX1 ,localY1), (localX2 ,localY2), 5)
         pygame.draw.aaline(screen, (255, 255, 255), (localX1 ,localY1), (localX2 ,localY2), 5)
+
+    for line in lineLibrary:
+        localX1 = line[0]
+        localY1 = line[1]
+
+        localX2 = line[2]
+        localY2 = line[3]
+
+        pygame.draw.aaline(screen, (255, 255, 255), (localX1 ,localY1), (localX2 ,localY2), 5)
+
 
     positionLibrary = copy.deepcopy(nextPositionLibrary) # cascades next frame into current frame
     velocityLibrary = copy.deepcopy(nextVelocityLibrary)
