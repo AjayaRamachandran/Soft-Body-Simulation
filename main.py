@@ -30,6 +30,10 @@ ecofTable = [] # bank of all edges' elastic coefficients
 
 # Environment
 lineLibrary = [] # list of quad-tuples that creates the shape of the ground, format = (x1, y1, x2, y2)
+normalsLibrary = [] # list of whether or not the normals of each line segment is flipped from the assumed direction, format (1) or (0)
+pointSignsLibrary = [] # list of n-tuples that store each point's "side" relationship with each line segment, format = (0,0,0,0...)
+sampleBuffer = [] # empty list that initializes the values for the line interactions of every point, the length is equal to the length of line library
+passedPoints = [] # constantly updating list of points that have passed through a line segment in the past frame, format = (pointIndex, lineIndex)
 
 ###### VARIABLES ######
 gravity = (0, 0.15)
@@ -47,7 +51,7 @@ lineLibrary.append((0, 720, 1280, 600))
 fps = 60
 clock = pygame.time.Clock()
 
-###### FUNCTIONS ######
+###### OPERATOR FUNCTIONS ######
 
 def dist(point1, point2): # abstracted distance function
     return sqrt((point2[0] - point1[0]) ** 2 + (point2[1] - point1[1]) ** 2)
@@ -69,6 +73,8 @@ def addTuplesAsVectors(listOfTuples): # function for adding all tuples in a list
         yVec = yVec/len(listOfTuples)
     return(xVec,yVec)
 
+###### MAIN FUNCTIONS ######
+
 def primeLists(): # readies the libraries with points to begin the simulation
     for y in range(simResolution):
         for x in range(simResolution):
@@ -82,8 +88,17 @@ def primeLists(): # readies the libraries with points to begin the simulation
     for item in range(simResolution ** 2):
             nextVelocityLibrary.append((0,0)) # appends a null vector
 
+    for i in range(len(lineLibrary)): # generates a sample buffer that is the length of the line library, which allows each point to store its status with every line
+        sampleBuffer.append(False)
+
+    for i in range(simResolution ** 2):
+        pointSignsLibrary.append(copy.deepcopy(sampleBuffer))
+
+    for i in lineLibrary:
+        normalsLibrary.append(False)
+
 def createEdgeTable():
-    # This script is extremely inefficient, looping every vertex for every other vertex (time complexity: n^2 where n is 100)
+    # This script is extremely inefficient, looping every vertex for every other vertex (time complexity: n^2 where n is 100) however it runs only once so it is ok.
     # This function is a very basic way to retrieve an edge table from a point field, based on the distance between points.
 
     for item in range(len(positionLibrary)):
@@ -126,7 +141,7 @@ def findRestingDistances(point): # takes a point and returns the resting distanc
     
     return restingDistances
 
-def side(point, line, flipNormal): # takes a point and the coordinates of the line and checks to see if the point is in the bounding box of the line
+def side(point, line, flipNormal): # tells if a point is above or below a line, defined as an extension of a line segment
     pointX = point[0]
     pointY = point[1]
 
@@ -138,16 +153,25 @@ def side(point, line, flipNormal): # takes a point and the coordinates of the li
     vectorAB = (lineX2 - lineX1, lineY2 - lineY1)
     vectorAP = (pointX - lineX1, pointY - lineY1)
     crossProduct = vectorAB[0] * vectorAP[1] - vectorAB[1] * vectorAP[0]
-    crossProductIsPos = bool(crossProduct > 0)
+    crossProductIsNeg = crossProduct < 0
 
-    if crossProductIsPos ^ flipNormal < 0: # if the cross product of the vectors AP and AB is less than 0, the point is on the same side as the assumed normal vector, which can be flipped
-        return 1 # front (on the same side as normal vector)
-    else:
-        return 0 # back (on opposite side of normal vector)
+    return (crossProductIsNeg) ^ (flipNormal) # if the cross product of the vectors AP and AB is less than 0, the point is above the line, but this can be flipped if the normal vector is flipped
 
 def lineCollisions():
-    for line in lineLibrary:
-        for point in positionLibrary:
+    global pointSignsLibrary
+    global passedPoints
+    passedPoints = [] # clears the current passed points to make new ones (hence, "constantly refreshing")
+    ln = 0
+    for line in lineLibrary: # loops through every line
+        pt = 0
+        for point in positionLibrary: # loops through every point
+            if pointSignsLibrary[pt][ln] != side(point, line, normalsLibrary[ln]):
+                passedPoints.append((pt,ln))
+            pointSignsLibrary[pt][ln] = side(point, line, normalsLibrary[ln])
+            
+            pt += 1
+        
+        ln += 1
 
 
 def transformPoint(point, connectedPoints, resting): # applies transformations to the point location based on inputted data
@@ -196,6 +220,7 @@ running = True # Runs the game loop
 while running:
 
     screen.fill((0,0,0))
+    lineCollisions()
 
     for pt in range(len(positionLibrary)):
         localX = positionLibrary[pt][0]
@@ -205,9 +230,12 @@ while running:
         restingDistances = findRestingDistances(pt)
 
         transformPoint(pt, connected, restingDistances)
-
-
-        pygame.draw.circle(screen, (255,255,255), (localX, localY), 5)
+        
+        for ln in range(len(lineLibrary)):
+            if (pt,ln) in passedPoints:
+                pygame.draw.circle(screen, (255,0,0), (localX, localY), 15)
+            else:
+                pygame.draw.circle(screen, (255,255,255), (localX, localY), 5)
         #pygame.draw.line(screen, (255,255,0), (640,0), (640,720), 3) # Guiding Line 1
         #pygame.draw.line(screen, (255,255,0), (0,360), (1280,360), 3) # Guiding Line 2
 
@@ -250,6 +278,7 @@ while running:
     clock.tick(fps)
     # update the screen
     pygame.display.update()
+    #time.sleep(1)
 
 # quit Pygame
 pygame.quit()
