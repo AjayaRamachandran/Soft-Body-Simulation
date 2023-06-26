@@ -50,9 +50,17 @@ denominator = 0.001
 
 # test ground state
 
+# Left Half Platform
 #lineLibrary.append((0, 600, 640, 600))
+
+# Tilt to Left
 #lineLibrary.append((0, 720, 1280, 600))
-lineLibrary.append((0, 600, 1280, 720))
+
+# Tilt to Right
+lineLibrary.append((0, 550, 1280, 720))
+
+# Right Wall
+#lineLibrary.append((1000, 720, 1280, 0))
 
 
 fps = 60
@@ -104,7 +112,7 @@ def getIntersectionPoint(line1, line2):
     if 0 <= t <= 1:
         return (x, y)  # Return the intersection point
     else:
-        return None  # No intersection within line segments (lines are not parallel, but they don't intersect in the specified segments)
+        return (x, y)  # No intersection within line segments (lines are not parallel, but they don't intersect in the specified segments)
 
 ###### MAIN FUNCTIONS ######
 
@@ -203,7 +211,7 @@ def lineCollisions():
         for point in positionLibrary: # loops through every point
             if point[0] > line[0] and point[0] < line[2]:
                 if pointSignsLibrary[pt][ln] != side(point, line, normalsLibrary[ln]):
-                    passedPoints.append((pt,ln,side(point, line, normalsLibrary[ln])))
+                    passedPoints.append((pt, ln))
             pointSignsLibrary[pt][ln] = side(point, line, normalsLibrary[ln])
             
             pt += 1
@@ -229,19 +237,53 @@ def transformPoint(point, connectedPoints, resting): # applies transformations t
     newTransformVector = addTuplesAsVectors(elasticVectors) # takes all acting elastic forces as vectors and adds them (net force)
 
     velocityTuple = list(velocityLibrary[point]) # tuples are immutable
-    velocityTuple[0] = velocityTuple[0]*dampening + newTransformVector[0]*1 + gravity[0] #+ (random.randint(-100,100))/2000
-    velocityTuple[1] = velocityTuple[1]*dampening + newTransformVector[1]*1 + gravity[1] #+ (random.randint(-100,100))/2000
-
     positionTuple = list(positionLibrary[point]) # tuples are immutable
+
+    
+    passedPoints = [] # clears the current passed points to make new ones (hence, "constantly refreshing")
+
+    
+    nextPointVelocity = [0, 0]
+    nextPointPosition = [0, 0]
+    ln = 0
+    for line in lineLibrary: # loops through every line
+        
+        if positionTuple[0] > line[0] and positionTuple[0] < line[2]:
+            nextPointVelocity[0] = velocityTuple[0] + gravity[0] + newTransformVector[0]
+            nextPointVelocity[1] = velocityTuple[1] + gravity[1] + newTransformVector[1]
+
+            nextPointPosition[0] = positionTuple[0] + nextPointVelocity[0]
+            nextPointPosition[1] = positionTuple[1] + nextPointVelocity[1]
+
+            if side(nextPointPosition, line, normalsLibrary[ln]) != side(positionTuple, line, normalsLibrary[ln]):
+                passedPoints.append((point, ln))
+                #positionTuple = nextPointPosition
+        #pointSignsLibrary[pt][ln] = side(positionLibrary[point], line, normalsLibrary[ln])
+    
+        ln += 1
     
 
+    
+    velocityTuple[0] += gravity[0]
+    velocityTuple[1] += gravity[1]
+    velocityTuple[0] += newTransformVector[0]
+    velocityTuple[1] += newTransformVector[1]
+    
+    touchingALine = False
     for line in range(len(lineLibrary)):
-        if (point,line,0) in passedPoints: # or (point,line,1) in passedPoints:
+        if (point,line) in passedPoints: # or (point,line,1) in passedPoints:
             
             liq = lineLibrary[line]
             rise = liq[3] - liq[1]
             run = liq[2] - liq[0]
             hyp = dist((liq[0],liq[1]),(liq[2],liq[3]))
+
+            '''
+            velocityTuple[0] -= newTransformVector[0]
+            velocityTuple[1] -= newTransformVector[1]
+            velocityTuple[0] -= gravity[0]
+            velocityTuple[1] -= gravity[1]
+            '''
 
             momentum = dist((0,velocityTuple[0]),(0,velocityTuple[1]))
 
@@ -249,17 +291,34 @@ def transformPoint(point, connectedPoints, resting): # applies transformations t
             # before intersecting with the ground and the position right after. We need to calculate the intersection point of these two line segments.
             x, y = getIntersectionPoint((oldPositionLibrary[point][0],oldPositionLibrary[point][1],positionLibrary[point][0],positionLibrary[point][1]),(liq))
 
-            positionTuple[1] = y - 0.01
+            positionTuple[1] = y - 3
             positionTuple[0] = x
 
             #velocityTuple[1] = 0
             #velocityTuple[0] = 0
 
-            velocityTuple[1] -= velocityTuple[1] * (run/hyp) * (run/hyp) * 1.333
-            velocityTuple[0] -= velocityTuple[0] * (run/hyp) * (rise/hyp) * 1.333
+            velocityTuple[1] -= momentum * (run/hyp) * (run/hyp) + 2
+            velocityTuple[0] += momentum * (run/hyp) * (rise/hyp)
+
+            touchingALine = True
+
     #if positionTuple[1] > 720:#- positionTuple[0]/2.5: # floor
         #positionTuple[1] = 720# - positionTuple[0]/2.5
         #velocityTuple[1] = 0
+
+    '''
+        if not True:
+            velocityTuple[0] += gravity[0]
+            velocityTuple[1] += gravity[1]
+            velocityTuple[0] += newTransformVector[0]
+            velocityTuple[1] += newTransformVector[1]
+        else:   
+            if not touchingALine:
+                velocityTuple[0] += gravity[0]
+                velocityTuple[1] += gravity[1]
+                velocityTuple[0] += newTransformVector[0]
+                velocityTuple[1] += newTransformVector[1]
+    '''
 
     positionTuple[0] = positionTuple[0] + (velocityTuple[0])
     positionTuple[1] = positionTuple[1] + (velocityTuple[1])
@@ -278,7 +337,7 @@ running = True # Runs the game loop
 while running:
 
     screen.fill((0,0,0))
-    lineCollisions()
+    #lineCollisions()
 
     for pt in range(len(positionLibrary)):
         localX = positionLibrary[pt][0]
@@ -312,6 +371,19 @@ while running:
 
         #pygame.draw.aaline(screen, ((510/(1+exp(0.5 * ((localECof -0.8) - 0.5)**2))),(510/(1+exp(0.5 * ((sqrt(abs(localECof))))**2))),(510/(1+exp(0.5 * ((0 - localECof - 0.8) - 0.5)**2)))), (localX1 ,localY1), (localX2 ,localY2), 5)
         pygame.draw.aaline(screen, (255, 255, 255), (localX1 ,localY1), (localX2 ,localY2), 5)
+        
+        '''
+        localX1 = oldPositionLibrary[edgeTable[edge][0]][0]
+        localY1 = oldPositionLibrary[edgeTable[edge][0]][1]
+
+        localX2 = oldPositionLibrary[edgeTable[edge][1]][0]
+        localY2 = oldPositionLibrary[edgeTable[edge][1]][1]
+
+        localECof = (dist((localX1, localY1), (localX2, localY2)) - restingDistanceTable[edge]) * (1 / trueElasticity) # behold, the elastic function again
+        ecofTable[edge] = localECof
+
+        pygame.draw.aaline(screen, (255, 0, 0), (localX1 ,localY1), (localX2 ,localY2), 5)
+        '''
 
     for line in lineLibrary:
         localX1 = line[0]
@@ -322,9 +394,11 @@ while running:
 
         pygame.draw.aaline(screen, (255, 255, 255), (localX1 ,localY1), (localX2 ,localY2), 5)
 
-
+    oldPositionLibrary = copy.deepcopy(positionLibrary)
     positionLibrary = copy.deepcopy(nextPositionLibrary) # cascades next frame into current frame
     velocityLibrary = copy.deepcopy(nextVelocityLibrary)
+    
+
 
     #text = font.render("denominator: " + str((round(denominator*1000))/1000), True, (255, 255, 255))
     #text_rect = text.get_rect()
