@@ -16,12 +16,13 @@ windowSize = (1280, 720)
 pygame.display.set_caption("Soft Body Simulation") # Sets title of window
 screen = pygame.display.set_mode(windowSize) # Sets the dimensions of the window to the windowSize
 
-#font = pygame.font.Font(None, 36)
+font = pygame.font.Font(None, 36)
 
 ###### INITIALIZE ######
 # Jelly
 positionLibrary = [] # bank of positions of all the points
 nextPositionLibrary = [] # buffer of the next frame's point positions
+oldPositionLibrary = [] # buffer of the last frame's point positions, used for calculating intersections of line segments
 velocityLibrary = [] # bank of velocities of all the points
 nextVelocityLibrary = [] # buffer of the next frame's point velocities
 edgeTable = [] # bank of all edges, stored as pairs of point indices
@@ -44,11 +45,14 @@ simResolution = 10
 trueElasticity = 0.5
 dampening = 0.99
 scale = 500
+momentum = 0
+denominator = 0.001
 
 # test ground state
 
-lineLibrary.append((0, 600, 1280, 720))
+#lineLibrary.append((0, 600, 640, 600))
 #lineLibrary.append((0, 720, 1280, 600))
+lineLibrary.append((0, 600, 1280, 720))
 
 
 fps = 60
@@ -76,6 +80,32 @@ def addTuplesAsVectors(listOfTuples): # function for adding all tuples in a list
         yVec = yVec/len(listOfTuples)
     return(xVec,yVec)
 
+def getIntersectionPoint(line1, line2):
+    x1 = line1[0]
+    y1 = line1[1]
+    x2 = line1[2]
+    y2 = line1[3]
+
+    x3 = line2[0]
+    y3 = line2[1]
+    x4 = line2[2]
+    y4 = line2[3]
+
+    denominator = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4)
+
+    if denominator == 0:
+        return None  # No intersection (lines are parallel)
+
+    t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / denominator
+
+    x = x1 + t * (x2 - x1)
+    y = y1 + t * (y2 - y1)
+
+    if 0 <= t <= 1:
+        return (x, y)  # Return the intersection point
+    else:
+        return None  # No intersection within line segments (lines are not parallel, but they don't intersect in the specified segments)
+
 ###### MAIN FUNCTIONS ######
 
 def primeLists(): # readies the libraries with points to begin the simulation
@@ -86,10 +116,13 @@ def primeLists(): # readies the libraries with points to begin the simulation
     for y in range(simResolution):
         for x in range(simResolution):
             nextPositionLibrary.append((x*(500 / simResolution) + (640 - (simResolution - 1) / 2 * (scale / simResolution)), y*(500 / simResolution) + (360 - (simResolution - 1) / 2 * (scale / simResolution))))
+            oldPositionLibrary.append((x*(500 / simResolution) + (640 - (simResolution - 1) / 2 * (scale / simResolution)), y*(500 / simResolution) + (360 - (simResolution - 1) / 2 * (scale / simResolution))))
     for item in range(simResolution ** 2):
             velocityLibrary.append((0,0)) # appends a null vector (not moving at the start)
     for item in range(simResolution ** 2):
             nextVelocityLibrary.append((0,0)) # appends a null vector
+
+
 
     for i in range(len(lineLibrary)): # generates a sample buffer that is the length of the line library, which allows each point to store its status with every line
         sampleBuffer.append(True)
@@ -170,7 +203,7 @@ def lineCollisions():
         for point in positionLibrary: # loops through every point
             if point[0] > line[0] and point[0] < line[2]:
                 if pointSignsLibrary[pt][ln] != side(point, line, normalsLibrary[ln]):
-                    passedPoints.append((pt,ln))
+                    passedPoints.append((pt,ln,side(point, line, normalsLibrary[ln])))
             pointSignsLibrary[pt][ln] = side(point, line, normalsLibrary[ln])
             
             pt += 1
@@ -179,6 +212,7 @@ def lineCollisions():
 
 
 def transformPoint(point, connectedPoints, resting): # applies transformations to the point location based on inputted data
+    global denominator
 
     elasticVectors = []
     for linkedPoint in range(len(connectedPoints)):
@@ -198,44 +232,40 @@ def transformPoint(point, connectedPoints, resting): # applies transformations t
     velocityTuple[0] = velocityTuple[0]*dampening + newTransformVector[0]*1 + gravity[0] #+ (random.randint(-100,100))/2000
     velocityTuple[1] = velocityTuple[1]*dampening + newTransformVector[1]*1 + gravity[1] #+ (random.randint(-100,100))/2000
 
-
     positionTuple = list(positionLibrary[point]) # tuples are immutable
-    positionTuple[0] = positionTuple[0] + (velocityTuple[0])
-    positionTuple[1] = positionTuple[1] + (velocityTuple[1])
+    
 
     for line in range(len(lineLibrary)):
-        if (point,line) in passedPoints:
+        if (point,line,0) in passedPoints: # or (point,line,1) in passedPoints:
             
             liq = lineLibrary[line]
             rise = liq[3] - liq[1]
             run = liq[2] - liq[0]
             hyp = dist((liq[0],liq[1]),(liq[2],liq[3]))
 
-            #velocityTuple[1] = 0
-            #velocityTuple[1] = velocityTuple[1] * - 0.9
-            #velocityTuple[0] += (rise/hyp)*(run/hyp)
-            #velocityTuple[1] += (rise/hyp)*(rise/hyp)
-            positionTuple[1] = liq[1] + (((positionTuple[0] - liq[0]) / (liq[2] - liq[0])) * (liq[3] - liq[1])) - 1
-            #velocityTuple[1] = 0
-            
-
-            
-            #positionTuple[0] += velocityTuple[0]
             momentum = dist((0,velocityTuple[0]),(0,velocityTuple[1]))
-            velocityTuple[1] = 0
-            velocityTuple[1] += (rise/hyp)*(rise/hyp)*momentum#*0.99
-            velocityTuple[0] += (rise/hyp)*(run/hyp)*momentum#*0.99
 
+            # we have two line segments - one is the line segment that defines the ground, and the other is the line segment that defines the last position the particle was in
+            # before intersecting with the ground and the position right after. We need to calculate the intersection point of these two line segments.
+            x, y = getIntersectionPoint((oldPositionLibrary[point][0],oldPositionLibrary[point][1],positionLibrary[point][0],positionLibrary[point][1]),(liq))
+
+            positionTuple[1] = y - 0.01
+            positionTuple[0] = x
+
+            #velocityTuple[1] = 0
+            #velocityTuple[0] = 0
+
+            velocityTuple[1] -= velocityTuple[1] * (run/hyp) * (run/hyp) * 1.333
+            velocityTuple[0] -= velocityTuple[0] * (run/hyp) * (rise/hyp) * 1.333
     #if positionTuple[1] > 720:#- positionTuple[0]/2.5: # floor
         #positionTuple[1] = 720# - positionTuple[0]/2.5
         #velocityTuple[1] = 0
-    #if point < 10: # attachment point
-        #positionTuple[1] = 0
-        #velocityTuple[0] = 0
-        #velocityTuple[1] = 0
-    
-    nextVelocityLibrary[point] = tuple(velocityTuple) # adds transformations to next frame
-    nextPositionLibrary[point] = tuple(positionTuple)
+
+    positionTuple[0] = positionTuple[0] + (velocityTuple[0])
+    positionTuple[1] = positionTuple[1] + (velocityTuple[1])
+
+    nextVelocityLibrary[point] = copy.deepcopy(tuple(velocityTuple)) # adds transformations to next frame
+    nextPositionLibrary[point] = copy.deepcopy(tuple(positionTuple))
 
 
 
@@ -296,7 +326,7 @@ while running:
     positionLibrary = copy.deepcopy(nextPositionLibrary) # cascades next frame into current frame
     velocityLibrary = copy.deepcopy(nextVelocityLibrary)
 
-    #text = font.render("avgECof: " + str((round(avgECof*1000000))/1000), True, (255, 255, 255))
+    #text = font.render("denominator: " + str((round(denominator*1000))/1000), True, (255, 255, 255))
     #text_rect = text.get_rect()
     #screen.blit(text, text_rect)
 
