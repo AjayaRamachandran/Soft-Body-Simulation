@@ -63,7 +63,7 @@ lineLibrary.append((0, 550, 1280, 720))
 #lineLibrary.append((1000, 720, 1280, 0))
 
 
-fps = 60
+fps = 5
 clock = pygame.time.Clock()
 
 ###### OPERATOR FUNCTIONS ######
@@ -248,15 +248,15 @@ def transformPoint(point, connectedPoints, resting): # applies transformations t
     ln = 0
     for line in lineLibrary: # loops through every line
         
-        if positionTuple[0] > line[0] and positionTuple[0] < line[2]:
-            nextPointVelocity[0] = velocityTuple[0] + gravity[0] + newTransformVector[0]
-            nextPointVelocity[1] = velocityTuple[1] + gravity[1] + newTransformVector[1]
+        if positionTuple[0] > line[0] and positionTuple[0] < line[2] and positionTuple[1] > min(line[1],line[3]) and positionTuple[1] < max(line[1],line[3]):
+            nextPointVelocity[0] = velocityTuple[0]*dampening + gravity[0] + newTransformVector[0]
+            nextPointVelocity[1] = velocityTuple[1]*dampening + gravity[1] + newTransformVector[1]
 
             nextPointPosition[0] = positionTuple[0] + nextPointVelocity[0]
             nextPointPosition[1] = positionTuple[1] + nextPointVelocity[1]
 
             if side(nextPointPosition, line, normalsLibrary[ln]) != side(positionTuple, line, normalsLibrary[ln]):
-                passedPoints.append((point, ln))
+                passedPoints.append((point, ln, side(nextPointPosition, line, normalsLibrary[ln])))
                 #positionTuple = nextPointPosition
         #pointSignsLibrary[pt][ln] = side(positionLibrary[point], line, normalsLibrary[ln])
     
@@ -264,14 +264,15 @@ def transformPoint(point, connectedPoints, resting): # applies transformations t
     
 
     
-    velocityTuple[0] += gravity[0]
-    velocityTuple[1] += gravity[1]
-    velocityTuple[0] += newTransformVector[0]
-    velocityTuple[1] += newTransformVector[1]
+    velocityTuple[0] = velocityTuple[0]*dampening + gravity[0] + newTransformVector[0]
+    velocityTuple[1] = velocityTuple[1]*dampening + gravity[1] + newTransformVector[1]
+
+    positionTuple[0] = positionTuple[0] + (velocityTuple[0])
+    positionTuple[1] = positionTuple[1] + (velocityTuple[1])
     
     touchingALine = False
     for line in range(len(lineLibrary)):
-        if (point,line) in passedPoints: # or (point,line,1) in passedPoints:
+        if (point,line,0) in passedPoints: # or (point,line,1) in passedPoints:
             
             liq = lineLibrary[line]
             rise = liq[3] - liq[1]
@@ -285,7 +286,7 @@ def transformPoint(point, connectedPoints, resting): # applies transformations t
             velocityTuple[1] -= gravity[1]
             '''
 
-            momentum = dist((0,velocityTuple[0]),(0,velocityTuple[1]))
+            momentum = dist((0,velocityTuple[0]),(0,velocityTuple[1])) * 0.99
 
             # we have two line segments - one is the line segment that defines the ground, and the other is the line segment that defines the last position the particle was in
             # before intersecting with the ground and the position right after. We need to calculate the intersection point of these two line segments.
