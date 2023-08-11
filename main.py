@@ -46,24 +46,25 @@ trueElasticity = 0.5
 dampening = 0.99
 scale = 500
 momentum = 0
-denominator = 0.001
+denominator = 0
 
 # test ground state
 
 # Left Half Platform
 #lineLibrary.append((0, 600, 640, 600))
+#lineLibrary.append((640, 600, 700, 720))
 
 # Tilt to Left
-#lineLibrary.append((0, 720, 1280, 600))
+lineLibrary.append((0, 720, 1280, 550))
 
 # Tilt to Right
-lineLibrary.append((0, 550, 1280, 720))
+#lineLibrary.append((0, 550, 1280, 720))
 
 # Right Wall
 #lineLibrary.append((1000, 720, 1280, 0))
 
 
-fps = 5
+fps = 60
 clock = pygame.time.Clock()
 
 ###### OPERATOR FUNCTIONS ######
@@ -235,12 +236,14 @@ def transformPoint(point, connectedPoints, resting): # applies transformations t
         elasticVectors.append(elasticVector)
     
     newTransformVector = addTuplesAsVectors(elasticVectors) # takes all acting elastic forces as vectors and adds them (net force)
+    newTransformVector = [x * 0.5 for x in newTransformVector]
 
     velocityTuple = list(velocityLibrary[point]) # tuples are immutable
     positionTuple = list(positionLibrary[point]) # tuples are immutable
 
     
     passedPoints = [] # clears the current passed points to make new ones (hence, "constantly refreshing")
+    passedFuturePoints = []
 
     
     nextPointVelocity = [0, 0]
@@ -248,7 +251,7 @@ def transformPoint(point, connectedPoints, resting): # applies transformations t
     ln = 0
     for line in lineLibrary: # loops through every line
         
-        if positionTuple[0] > line[0] and positionTuple[0] < line[2] and positionTuple[1] > min(line[1],line[3]) and positionTuple[1] < max(line[1],line[3]):
+        if positionTuple[0] > min(line[0],line[2]) - 10 and positionTuple[0] < max(line[0],line[2]) + 10 and positionTuple[1] > min(line[1],line[3]) - 10 and positionTuple[1] < max(line[1],line[3]) + 10:
             nextPointVelocity[0] = velocityTuple[0]*dampening + gravity[0] + newTransformVector[0]
             nextPointVelocity[1] = velocityTuple[1]*dampening + gravity[1] + newTransformVector[1]
 
@@ -256,7 +259,8 @@ def transformPoint(point, connectedPoints, resting): # applies transformations t
             nextPointPosition[1] = positionTuple[1] + nextPointVelocity[1]
 
             if side(nextPointPosition, line, normalsLibrary[ln]) != side(positionTuple, line, normalsLibrary[ln]):
-                passedPoints.append((point, ln, side(nextPointPosition, line, normalsLibrary[ln])))
+                passedPoints.append((point, ln))#, side(nextPointPosition, line, normalsLibrary[ln])))
+                passedFuturePoints.append(nextPointPosition)
                 #positionTuple = nextPointPosition
         #pointSignsLibrary[pt][ln] = side(positionLibrary[point], line, normalsLibrary[ln])
     
@@ -267,12 +271,13 @@ def transformPoint(point, connectedPoints, resting): # applies transformations t
     velocityTuple[0] = velocityTuple[0]*dampening + gravity[0] + newTransformVector[0]
     velocityTuple[1] = velocityTuple[1]*dampening + gravity[1] + newTransformVector[1]
 
-    positionTuple[0] = positionTuple[0] + (velocityTuple[0])
-    positionTuple[1] = positionTuple[1] + (velocityTuple[1])
+    #positionTuple[0] = positionTuple[0] + (velocityTuple[0])
+    #positionTuple[1] = positionTuple[1] + (velocityTuple[1])
     
     touchingALine = False
     for line in range(len(lineLibrary)):
-        if (point,line,0) in passedPoints: # or (point,line,1) in passedPoints:
+        if (point,line) in passedPoints: # or (point,line,1) in passedPoints:
+            nextPoint = passedFuturePoints[passedPoints.index((point, line))]
             
             liq = lineLibrary[line]
             rise = liq[3] - liq[1]
@@ -290,16 +295,27 @@ def transformPoint(point, connectedPoints, resting): # applies transformations t
 
             # we have two line segments - one is the line segment that defines the ground, and the other is the line segment that defines the last position the particle was in
             # before intersecting with the ground and the position right after. We need to calculate the intersection point of these two line segments.
-            x, y = getIntersectionPoint((oldPositionLibrary[point][0],oldPositionLibrary[point][1],positionLibrary[point][0],positionLibrary[point][1]),(liq))
+            x, y = getIntersectionPoint((nextPoint[0],nextPoint[1],positionLibrary[point][0],positionLibrary[point][1]),(liq))
 
-            positionTuple[1] = y - 3
+            positionTuple[1] = y
             positionTuple[0] = x
 
             #velocityTuple[1] = 0
             #velocityTuple[0] = 0
 
-            velocityTuple[1] -= momentum * (run/hyp) * (run/hyp) + 2
+            velocityTuple[1] -= momentum * (run/hyp) * (run/hyp)
             velocityTuple[0] += momentum * (run/hyp) * (rise/hyp)
+
+            nextPointPosition[0] = positionTuple[0] + velocityTuple[0]
+            nextPointPosition[1] = positionTuple[1] + velocityTuple[1]
+
+            nextCorrectPosition = [0, 0]
+            #noclip function
+            
+            nextCorrectPosition[1] = (((nextPointPosition[0] - liq[0]) / (liq[2] - liq[0])) * (liq[3] - liq[1])) + liq[1]
+            if nextPointPosition[1] > nextCorrectPosition[1]:
+                velocityTuple[1] -= (nextCorrectPosition[1] - nextPointPosition[1]) * -1 + 0.1
+            
 
             touchingALine = True
 
