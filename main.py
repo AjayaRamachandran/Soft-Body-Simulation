@@ -40,15 +40,16 @@ passedPoints = [] # constantly updating list of points that have passed through 
 gravity = (0, 0.15)
 #restingDistance = 10
 
-# elasticity = 0.5
 simResolution = 10
-trueElasticity = 0.5
-dampening = 0.99
+elasticity = 0.5
+damping = 0.99
 scale = 500
 momentum = 0
 denominator = 0
+elasticStrength = 0.5
 
 # test ground state
+#lineLibrary.append((0, 700, 1280, 700))
 
 # Left Half Platform
 #lineLibrary.append((0, 600, 640, 600))
@@ -202,30 +203,13 @@ def side(point, line, flipNormal): # tells if a point is above or below a line, 
 
     return (crossProductIsNeg) ^ (flipNormal) # if the cross product of the vectors AP and AB is less than 0, the point is above the line, but this can be flipped if the normal vector is flipped
 
-def lineCollisions():
-    global pointSignsLibrary
-    global passedPoints
-    passedPoints = [] # clears the current passed points to make new ones (hence, "constantly refreshing")
-    ln = 0
-    for line in lineLibrary: # loops through every line
-        pt = 0
-        for point in positionLibrary: # loops through every point
-            if point[0] > line[0] and point[0] < line[2]:
-                if pointSignsLibrary[pt][ln] != side(point, line, normalsLibrary[ln]):
-                    passedPoints.append((pt, ln))
-            pointSignsLibrary[pt][ln] = side(point, line, normalsLibrary[ln])
-            
-            pt += 1
-        
-        ln += 1
-
 
 def transformPoint(point, connectedPoints, resting): # applies transformations to the point location based on inputted data
     global denominator
 
     elasticVectors = []
     for linkedPoint in range(len(connectedPoints)):
-        ecof = ((dist(positionLibrary[connectedPoints[linkedPoint]], positionLibrary[point])) - restingDistanceTable[resting[linkedPoint]]) * (1 / trueElasticity) # behold, the elastic function
+        ecof = ((dist(positionLibrary[connectedPoints[linkedPoint]], positionLibrary[point])) - restingDistanceTable[resting[linkedPoint]]) * (1 / elasticity) # behold, the elastic function
 
         # the above function is based on the Wikipedia article on Hooke's Law: https://en.wikipedia.org/wiki/Hooke%27s_law which states,
         # "In physics, Hooke's law is an empirical law which states that the force (F) needed to extend or compress a spring by some distance (x) scales linearly with respect to that distance"
@@ -236,24 +220,28 @@ def transformPoint(point, connectedPoints, resting): # applies transformations t
         elasticVectors.append(elasticVector)
     
     newTransformVector = addTuplesAsVectors(elasticVectors) # takes all acting elastic forces as vectors and adds them (net force)
-    newTransformVector = [x * 0.5 for x in newTransformVector]
+    newTransformVector = [a * elasticStrength for a in newTransformVector] # multiplies the net elastic force by the elasticStrength, which if weaker means the object has less elastic influence (relative to other forces)
 
     velocityTuple = list(velocityLibrary[point]) # tuples are immutable
     positionTuple = list(positionLibrary[point]) # tuples are immutable
 
     
     passedPoints = [] # clears the current passed points to make new ones (hence, "constantly refreshing")
-    passedFuturePoints = []
+    passedFuturePoints = [] # list of the simulated positions of points (explained below)
 
     
     nextPointVelocity = [0, 0]
     nextPointPosition = [0, 0]
     ln = 0
+
+    # [1] the below loop is how the system detects whether or not a point has intersected with a line. it simulates the forces applied to the point to predict whether it will pass
+    # through the line in the next frame, and if so flags it as a "passedPoint". this information is useful later (see [2])
+
     for line in lineLibrary: # loops through every line
         
         if positionTuple[0] > min(line[0],line[2]) - 10 and positionTuple[0] < max(line[0],line[2]) + 10 and positionTuple[1] > min(line[1],line[3]) - 10 and positionTuple[1] < max(line[1],line[3]) + 10:
-            nextPointVelocity[0] = velocityTuple[0]*dampening + gravity[0] + newTransformVector[0]
-            nextPointVelocity[1] = velocityTuple[1]*dampening + gravity[1] + newTransformVector[1]
+            nextPointVelocity[0] = velocityTuple[0]*damping + gravity[0] + newTransformVector[0]
+            nextPointVelocity[1] = velocityTuple[1]*damping + gravity[1] + newTransformVector[1]
 
             nextPointPosition[0] = positionTuple[0] + nextPointVelocity[0]
             nextPointPosition[1] = positionTuple[1] + nextPointVelocity[1]
@@ -261,20 +249,17 @@ def transformPoint(point, connectedPoints, resting): # applies transformations t
             if side(nextPointPosition, line, normalsLibrary[ln]) != side(positionTuple, line, normalsLibrary[ln]):
                 passedPoints.append((point, ln))#, side(nextPointPosition, line, normalsLibrary[ln])))
                 passedFuturePoints.append(nextPointPosition)
-                #positionTuple = nextPointPosition
-        #pointSignsLibrary[pt][ln] = side(positionLibrary[point], line, normalsLibrary[ln])
-    
         ln += 1
     
 
     
-    velocityTuple[0] = velocityTuple[0]*dampening + gravity[0] + newTransformVector[0]
-    velocityTuple[1] = velocityTuple[1]*dampening + gravity[1] + newTransformVector[1]
+    velocityTuple[0] = velocityTuple[0]*damping + gravity[0] + newTransformVector[0]
+    velocityTuple[1] = velocityTuple[1]*damping + gravity[1] + newTransformVector[1]
 
-    #positionTuple[0] = positionTuple[0] + (velocityTuple[0])
-    #positionTuple[1] = positionTuple[1] + (velocityTuple[1])
-    
-    touchingALine = False
+    # [2] this below loop is responsible for performing the necessary calculations to points which will pass a line this frame. first, the exact point of intersection
+    # with the line is calculated, and the point is moved there. next, their momentum is calculated, which is applied in the direction of the line's gradient. lastly, a
+    # noclip function is run to make sure the point remains above the line after the calculations take place (if for whatever reason it is not by a small amount)
+
     for line in range(len(lineLibrary)):
         if (point,line) in passedPoints: # or (point,line,1) in passedPoints:
             nextPoint = passedFuturePoints[passedPoints.index((point, line))]
@@ -284,58 +269,33 @@ def transformPoint(point, connectedPoints, resting): # applies transformations t
             run = liq[2] - liq[0]
             hyp = dist((liq[0],liq[1]),(liq[2],liq[3]))
 
-            '''
-            velocityTuple[0] -= newTransformVector[0]
-            velocityTuple[1] -= newTransformVector[1]
-            velocityTuple[0] -= gravity[0]
-            velocityTuple[1] -= gravity[1]
-            '''
-
             momentum = dist((0,velocityTuple[0]),(0,velocityTuple[1])) * 0.99
 
-            # we have two line segments - one is the line segment that defines the ground, and the other is the line segment that defines the last position the particle was in
-            # before intersecting with the ground and the position right after. We need to calculate the intersection point of these two line segments.
+            # we have two line segments - one is the line segment that defines the ground, and the other is the line segment that defines the next position the particle will be in
+            # after intersecting with the ground and the other is the position now. we need to calculate the intersection point of these two line segments.
+
             x, y = getIntersectionPoint((nextPoint[0],nextPoint[1],positionLibrary[point][0],positionLibrary[point][1]),(liq))
 
-            positionTuple[1] = y
             positionTuple[0] = x
+            positionTuple[1] = y
+            
+            velocityTuple[0] += momentum * (run/hyp) * (rise/hyp) * 0.5
+            velocityTuple[1] -= momentum * (rise/hyp) * (rise/hyp) * 0.5
 
-            #velocityTuple[1] = 0
-            #velocityTuple[0] = 0
-
-            velocityTuple[1] -= momentum * (run/hyp) * (run/hyp)
-            velocityTuple[0] += momentum * (run/hyp) * (rise/hyp)
+            #print(velocityTuple)
 
             nextPointPosition[0] = positionTuple[0] + velocityTuple[0]
             nextPointPosition[1] = positionTuple[1] + velocityTuple[1]
 
             nextCorrectPosition = [0, 0]
-            #noclip function
-            
+
+            # noclip function
             nextCorrectPosition[1] = (((nextPointPosition[0] - liq[0]) / (liq[2] - liq[0])) * (liq[3] - liq[1])) + liq[1]
             if nextPointPosition[1] > nextCorrectPosition[1]:
                 velocityTuple[1] -= (nextCorrectPosition[1] - nextPointPosition[1]) * -1 + 0.1
             
 
             touchingALine = True
-
-    #if positionTuple[1] > 720:#- positionTuple[0]/2.5: # floor
-        #positionTuple[1] = 720# - positionTuple[0]/2.5
-        #velocityTuple[1] = 0
-
-    '''
-        if not True:
-            velocityTuple[0] += gravity[0]
-            velocityTuple[1] += gravity[1]
-            velocityTuple[0] += newTransformVector[0]
-            velocityTuple[1] += newTransformVector[1]
-        else:   
-            if not touchingALine:
-                velocityTuple[0] += gravity[0]
-                velocityTuple[1] += gravity[1]
-                velocityTuple[0] += newTransformVector[0]
-                velocityTuple[1] += newTransformVector[1]
-    '''
 
     positionTuple[0] = positionTuple[0] + (velocityTuple[0])
     positionTuple[1] = positionTuple[1] + (velocityTuple[1])
@@ -354,7 +314,6 @@ running = True # Runs the game loop
 while running:
 
     screen.fill((0,0,0))
-    #lineCollisions()
 
     for pt in range(len(positionLibrary)):
         localX = positionLibrary[pt][0]
@@ -382,7 +341,7 @@ while running:
         localX2 = positionLibrary[edgeTable[edge][1]][0]
         localY2 = positionLibrary[edgeTable[edge][1]][1]
 
-        localECof = (dist((localX1, localY1), (localX2, localY2)) - restingDistanceTable[edge]) * (1 / trueElasticity) # behold, the elastic function again
+        localECof = (dist((localX1, localY1), (localX2, localY2)) - restingDistanceTable[edge]) * (1 / elasticity) # behold, the elastic function again
         ecofTable[edge] = localECof
         #avgECof = sum(ecofTable) / len(ecofTable)
 
@@ -396,7 +355,7 @@ while running:
         localX2 = oldPositionLibrary[edgeTable[edge][1]][0]
         localY2 = oldPositionLibrary[edgeTable[edge][1]][1]
 
-        localECof = (dist((localX1, localY1), (localX2, localY2)) - restingDistanceTable[edge]) * (1 / trueElasticity) # behold, the elastic function again
+        localECof = (dist((localX1, localY1), (localX2, localY2)) - restingDistanceTable[edge]) * (1 / elasticity) # behold, the elastic function again
         ecofTable[edge] = localECof
 
         pygame.draw.aaline(screen, (255, 0, 0), (localX1 ,localY1), (localX2 ,localY2), 5)
