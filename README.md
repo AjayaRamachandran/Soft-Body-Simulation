@@ -8,7 +8,7 @@ I first stumbled upon elastic code many years ago, and have used it in many unre
 
 Due to what is knows as Hooke's law, the force of elasticity present between two objects is directly proportional to the amount it is stretched from its resting state. (https://en.wikipedia.org/wiki/Hooke%27s_law)
 
-#### In code, this is easy to implement. Let's use some pseudo-variables.
+** In code, this is easy to implement. Let's use some pseudo-variables. **
 
 `elasticCoefficient = (distance - restingDistance) * (1 / elasticity)`
 
@@ -18,14 +18,14 @@ The `(1 / elasticity)` is a useful tool as it allows you to have full control ov
 
 The `elasticCoefficient`, which is just a value that represents the strength of the elastic force, now needs to be converted into a vector, so that it may be added to the gravity vector, and create the final motion vector of the point. This is relatively simple:
 
-#### To achieve an "elastic vector", we need two things - the strength of the force (already known to be the `elasticCoefficient`), and the direction of the force, which can be calculated by taking the `atan2` of the differences the point's `x` and `y` coordinates and those of the point it is connected to. Multiplying the `sin` of the `direction` by the `elasticCoefficient` gets us the `y` component, and multiplying the `cos` of the `direction` by the `elasticCoefficient` gets us the `x` component. (This last step is, in mathematical lingo, converting a polar vector into a rectangular vector.)
+** To achieve an "elastic vector", we need two things - the strength of the force (already known to be the `elasticCoefficient`), and the direction of the force, which can be calculated by taking the `atan2` of the differences the point's `x` and `y` coordinates and those of the point it is connected to. Multiplying the `sin` of the `direction` by the `elasticCoefficient` gets us the `y` component, and multiplying the `cos` of the `direction` by the `elasticCoefficient` gets us the `x` component. (This last step is, in mathematical lingo, converting a polar vector into a rectangular vector.) **
 
 ## Step 2: Getting More Complex - More than Two Objects
 The elastic demonstration is cool, but gets boring pretty quick. I wanted to use the elastic physics to simulate something greater, a structure similar to jell-o or sponge, both of which exhibit properties of what is known as a "soft body". Soft bodies come in two flavors, namely plastic and elastic soft bodies, the key difference between the two being that plastic soft bodies deform irreversibly when influenced, while elastic soft bodies return to their original shape. We can simulate the latter using an expansion on my elastic code.
 
 In order to create the simulation, `100` points are created in a square lattice structure, and a very simple edge table is constructed based on distance (at the start of the program) in order to generate the elastic connections between the points. The distance between adjacent points in the lattice is `10`, so if the threshold distance for elastic-connector generation is greater than `10 * sqrt(2)`, then not only do rigid squares form, but so do cross-beams that greatly improve the structural integrity of the simulation.
 
-#### Mathematically, this can be proven because the diagonals of a square have `sqrt(2)` times the length of the sides. Therefore, if the side lengths are `10`, then the diagonals have a length of `sqrt(2) * 10`, which is approximately `14.14`, and thus a threshold distance of `15` would cover straights and diagonals.
+** Mathematically, this can be proven because the diagonals of a square have `sqrt(2)` times the length of the sides. Therefore, if the side lengths are `10`, then the diagonals have a length of `sqrt(2) * 10`, which is approximately `14.14`, and thus a threshold distance of `15` would cover straights and diagonals. **
 
 A slight nuance to keep note of here is that the `restingDistance` of the diagonal connections is different from the `restingDistance` of the perpendicular connections. If they were the same, the edges and diagonals would want to be the same length, and would cause immense stress on the entire object. Rather, the `restingDistance` of a connection is calculated from the initial distance in the generated lattice, so the natural tendency of the system is to return to the initial lattice shape, and tension/stress is greatly reduced.
 
