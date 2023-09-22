@@ -1,6 +1,6 @@
 # Soft Body Simulation
 
-#### This experimental simulation program developed by Ajaya Ramachandran shows a soft body simulation of a falling object. It is an example of a mass-spring type simulation of a soft body, and features complex interparticle interactions, simple rigid interactions with a complex editable environment, and many painful hours and sleepless nights of work.
+**This experimental simulation program developed by Ajaya Ramachandran shows a soft body simulation of a falling object. It is an example of a mass-spring type simulation of a soft body, and features complex interparticle interactions, simple rigid interactions with a complex editable environment, and many painful hours and sleepless nights of work.**
 
 
 ## Step 1: The Origin - Elastics
