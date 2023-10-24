@@ -1,5 +1,5 @@
 <p align="center">
-  <img alt="Nodes" src="https://i.ibb.co/wYDwySQ/mesh.png" width="140px" />
+  <img alt="Nodes" src="https://i.ibb.co/wYDwySQ/mesh.png" width="140px" height="149px"/>
   <h1 align="center">Soft Body Simulation</h1>
 </p>
 
