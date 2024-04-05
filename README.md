@@ -15,7 +15,7 @@ Due to what is knows as Hooke's law, the force of elasticity present between two
 
 `elasticCoefficient = (distance - restingDistance) * (1 / elasticity)`
 
-At first glance, this seems complicated, but breaking it down it is simple. The `(distance - restingDistance)` is simply a linear function that returns `0` when the `distance` is equal to the `restingDistance`. This means that when the object is in a free state (no gravity), any position other than a position where the object is at the `restingDistance` will return some value for the `elasticCoefficient` that will drive the motion of the object to a place where it will be closer to the resting state, and make the `elasticCoefficient` approach `0`. This is an exmaple of a negative feedback loop.
+At first glance, this seems complicated, but breaking it down it is simple. The `(distance - restingDistance)` is simply a linear function that returns `0` when the `distance` is equal to the `restingDistance`. This means that when the object is in a free state (no gravity), any position other than a position where the object is at the `restingDistance` will return some value for the `elasticCoefficient` that will drive the motion of the object to a place where it will be closer to the resting state, and make the `elasticCoefficient` approach `0`. This is an example of a negative feedback loop.
 
 The `(1 / elasticity)` is a useful tool as it allows you to have full control over how "snappy" the elastic is. A lower elasticity will cause the object to very quickly and rigidly return to its resting state, whereas a higher elasticity will cause the object to slowly wobble around toward that state.
 
