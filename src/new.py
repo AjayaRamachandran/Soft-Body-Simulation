@@ -21,18 +21,19 @@ screen = pygame.display.set_mode(windowSize) # Sets the dimensions of the window
 font = pygame.font.Font(None, 36)
 
 fps = 60
-fpsMultiplier = 5
+fpsMultiplier = 10
 clock = pygame.time.Clock()
-dt = 1/5
+dt = 1/10
 
 ###### INITIALIZE ######
 
-SIMSPEED = 0.08
+SIMSPEED = 0.04
 GRAVITY = [0, 2]
 SPACING = 40
 CLOSELIMIT = 20
 RESOLUTION = 3
-SPRINGLIMIT = SPACING * 1.5
+#SPRINGLIMIT = SPACING * 1.5
+SPRINGLIMIT = 125
 STIFFNESS = 5
 DAMPING = 0.992
 
@@ -42,7 +43,8 @@ listOfPoints = []
 newListOfPoints = []
 springs = []
 oldMouse = pygame.mouse.get_pos()
-mode = "grid"
+mode = "test"
+editor = True
 
 ###### OPERATOR FUNCTIONS ######
 
@@ -93,11 +95,14 @@ def initializePoints(): # function to create the points in a grid setup
     if mode == "grid":
         for x in range(-RESOLUTION, RESOLUTION + 1):
             for y in range(-RESOLUTION, RESOLUTION + 1):
-                listOfPoints.append([width/2 + x*SPACING, height/2 + y*SPACING, 0, 0])
+                listOfPoints.append([width/2 + x*SPACING, height/2 + y*SPACING, 0, 0, False])
     else:
-        for i in range(10):
-            listOfPoints.append([width/2 + random.randint(-100, 100), height/2 + random.randint(-100, 100), 0, 0])
-
+        listOfPoints.append([width/2 - 250, height/2 + 50, 0, 0, True])
+        for truss in range(1,6):
+            if not truss == 5:
+                listOfPoints.append([width/2 - 250 + (truss)*100, height/2 + 50, 0, 0, False])
+            listOfPoints.append([width/2 - 250 + (truss - 0.5)*100, height/2 - 50, 0, 0, False])
+        listOfPoints.append([width/2 + 250, height/2 + 50, 0, 0, True])
     #listOfPoints.append([width/2, height/2, 0, -1])
     #listOfPoints.append([width/2, height/2 + SPACING, 0, 1])
 
@@ -123,7 +128,7 @@ def transformPoint(index): # master function to transform a point
     '''
     position = [0,0]
     velocity = [0,0]
-    [position[0], position[1], velocity[0], velocity[1]] = listOfPoints[index]
+    [position[0], position[1], velocity[0], velocity[1], fixed] = listOfPoints[index]
     #position = addVectors([position, [random.randint(-1,1), random.randint(-1,1)]])\
     acceleration = [0, 0]
     acceleration = addVectors([acceleration, GRAVITY])
@@ -131,16 +136,16 @@ def transformPoint(index): # master function to transform a point
     if position[1] >= 550:
         acceleration = addVectors([acceleration, [0, (-position[1] + 550) * 1]])
 
-    for spring in springs:
+    for spring in springs: # spring force calculation
         if index in spring[0:2]:
-            if spring[1] == index:
+            if spring[1] == index: # checks to see if the spring has our current point on one of its ends
                 direction = dirTo(listOfPoints[spring[0]][0:2], listOfPoints[spring[1]][0:2])
             else:
                 direction = dirTo(listOfPoints[spring[1]][0:2], listOfPoints[spring[0]][0:2])
             distance = dist(listOfPoints[spring[0]][0:2], listOfPoints[spring[1]][0:2])
-            springVector = [(cos(direction) * STIFFNESS * (spring[2] - distance)), (sin(direction) * STIFFNESS * (spring[2] - distance))]
+            springVector = [(cos(direction) * STIFFNESS * (spring[2] - distance)), (sin(direction) * STIFFNESS * (spring[2] - distance))] # converts polar to rect
             acceleration = addVectors([acceleration, springVector])
-    for index2 in range(len(listOfPoints)):
+    for index2 in range(len(listOfPoints)): # "close pressure" calculation, inspired off of some other people's designs that did something similar to push close particles apart
         if index2 != index:
             distance = dist(position, listOfPoints[index2][0:2])
             direction = dirTo(position, listOfPoints[index2][0:2])
@@ -152,12 +157,13 @@ def transformPoint(index): # master function to transform a point
     acceleration = [axis * SIMSPEED for axis in acceleration]
     velocity = addVectors([velocity, acceleration])
     velocity = [axis * DAMPING for axis in velocity]
-    #position = addVectors([position, velocity])
-    position = [position[i] + velocity[i] * dt + 0.5 * acceleration[i] * dt**2 for i in range(len(position))]
-    #if index == 0:
-        #position = [width/2, height/2]
-        #velocity = [0,0]
-    pointInformation = [position[0], position[1], velocity[0], velocity[1]]
+    #position = addVectors([position, velocity]) # euler integration (old)
+    
+    if fixed:
+        position = position # edge case where point is considered "fixed", if so do not change position
+    else:
+        position = [position[i] + velocity[i] * dt + 0.5 * acceleration[i] * dt**2 for i in range(len(position))] # VERLET integration, reduces jitter and we can get away with less sim steps/frame
+    pointInformation = [position[0], position[1], velocity[0], velocity[1], fixed]
     return pointInformation
 
 ###### MAINLOOP ######
@@ -172,9 +178,22 @@ while running:
         pygame.draw.circle(screen, (150, 150, 150), point[0:2], 7)
         pygame.draw.circle(screen, (0,0,0), point[0:2], 4)
     
+    numDestructions = 0 # Hard Limit : Only one structure breakage per frame
     for spring in springs:
-        red = int(clamp(0 + 8 * abs((dist(listOfPoints[spring[0]], listOfPoints[spring[1]]) - spring[2])), [0, 255]))
+        stress = abs((dist(listOfPoints[spring[0]], listOfPoints[spring[1]]) - spring[2]))
+        if stress > 20 and numDestructions <= 1:
+            listOfPoints.append(copy.copy(listOfPoints[spring[0]]))
+            listOfPoints.append(copy.copy(listOfPoints[spring[1]]))
+            springs.append([len(listOfPoints) - 2, len(listOfPoints) - 1, copy.copy(spring[2])])
+            springs.remove(spring)
+            numDestructions += 1
+        red = int(clamp(0 + 8 * stress, [0, 255]))
         pygame.draw.aaline(screen, (red, 0, 0), listOfPoints[spring[0]][0:2], listOfPoints[spring[1]][0:2])
+    if numDestructions != 0:
+        springs.pop()
+        listOfPoints.pop()
+        listOfPoints.pop()
+    newListOfPoints = copy.deepcopy(listOfPoints)
 
     for event in pygame.event.get(): # checks if program is quit, if so stops the code
         if event.type == pygame.QUIT:
@@ -199,6 +218,7 @@ while running:
     # update the screen
     pygame.display.update()
     #time.sleep(1)
+
     
     if pygame.key.get_pressed()[pygame.K_RIGHT]:
         SIMSPEED *= 0.909
