@@ -47,7 +47,7 @@ def getIntersectionPoint(line1, line2):
     if 0 <= t <= 1:
         return (x, y)  # Return the intersection point
     else:
-        return (x, y)  # No intersection within line segments (lines are not parallel, but they don't intersect in the specified segments)
+        return (x, y) # No intersection within line segments (lines are not parallel, but they don't intersect in the specified segments)
     
 ###### INITIALIZE ######
 
@@ -71,11 +71,15 @@ running = True # Runs the game loop
 while running:
 
     initialize()
-    screen.fill((0,0,0))
+    if (x5, y5) == (None, None):
+        screen.fill((255,0,0))
+    else:
+        screen.fill((0,0,0))
+        pygame.draw.circle(screen, (255, 255, 255), (x5, y5), 5)
 
     pygame.draw.aaline(screen, (255, 255, 255), (pointX1, pointY1), (pointX2, pointY2), 5)
     pygame.draw.aaline(screen, (255, 255, 255), (pointX3, pointY3), (pointX4, pointY4), 5)
-    pygame.draw.circle(screen, (255, 255, 255), (x5, y5), 5)
+    
 
     for event in pygame.event.get(): # checks if program is quit, if so stops the code
         if event.type == pygame.QUIT:

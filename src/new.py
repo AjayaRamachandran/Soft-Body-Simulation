@@ -27,21 +27,27 @@ dt = 1/10
 
 ###### INITIALIZE ######
 
-SIMSPEED = 0.04
+SIMSPEED = 0.02
 GRAVITY = [0, 2]
 SPACING = 40
 CLOSELIMIT = 20
 RESOLUTION = 3
 #SPRINGLIMIT = SPACING * 1.5
 SPRINGLIMIT = 125
-STIFFNESS = 5
-DAMPING = 0.992
+STIFFNESS = 60
+DAMPING = 0.996
 
 ###### VARIABLES ######
 
 listOfPoints = []
 newListOfPoints = []
+chasePoints = []
 springs = []
+
+objects = []
+newObjects = []
+objectSprings = []
+
 oldMouse = pygame.mouse.get_pos()
 mode = "test"
 editor = True
@@ -84,6 +90,44 @@ def addVectors(listOfVectors): # function for adding all tuples in a list as vec
 
     return [xVec,yVec]
 
+def getIntersectionPoint(line1, line2):
+    '''
+    ## getIntersectionPoint()
+    Computes the coordinate of intersection between two line segments, outputting `None` if the line segments do not intersect.
+    '''
+    x1 = line1[0][0]
+    y1 = line1[0][1]
+    x2 = line1[1][0]
+    y2 = line1[1][1]
+
+    x3 = line2[0][0]
+    y3 = line2[0][1]
+    x4 = line2[1][0]
+    y4 = line2[1][1]
+
+    denominator = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4)
+
+    if denominator == 0:
+        return None  # No intersection (lines are parallel)
+
+    t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / denominator
+
+    x = x1 + t * (x2 - x1)
+    y = y1 + t * (y2 - y1)
+
+    if 0 <= t <= 1:
+        return (x, y)  # Return the intersection point
+    else:
+        return None  # No intersection within line segments (lines are not parallel, but they don't intersect in the specified segments)
+
+def colorLerp(color1, color2, fac): # function for adding all tuples in a list as vectors
+    '''
+    ## colorLerp()
+    Takes two colors (tuples/lists) and a lerp value `fac` between 0 and 1 that blends between those colors at that proportion.
+    '''
+
+    return [color1[0] * (1-fac) + color2[0] * fac, color1[1] * (1-fac) + color2[1] * fac, color1[2] * (1-fac) + color2[2] * fac]
+
 ###### MAIN FUNCTIONS ######
 
 def initializePoints(): # function to create the points in a grid setup
@@ -91,7 +135,7 @@ def initializePoints(): # function to create the points in a grid setup
     ## initializePoints()
     Function for creating points in a grid setup. Uses global variables like `SPACING` and `RESOLUTION` to control the shape.
     '''
-    global newListOfPoints
+    global newListOfPoints, chasePoints
     if mode == "grid":
         for x in range(-RESOLUTION, RESOLUTION + 1):
             for y in range(-RESOLUTION, RESOLUTION + 1):
@@ -103,56 +147,92 @@ def initializePoints(): # function to create the points in a grid setup
                 listOfPoints.append([width/2 - 250 + (truss)*100, height/2 + 50, 0, 0, False])
             listOfPoints.append([width/2 - 250 + (truss - 0.5)*100, height/2 - 50, 0, 0, False])
         listOfPoints.append([width/2 + 250, height/2 + 50, 0, 0, True])
+        chasePoints = copy.deepcopy(listOfPoints)
     #listOfPoints.append([width/2, height/2, 0, -1])
     #listOfPoints.append([width/2, height/2 + SPACING, 0, 1])
 
     newListOfPoints = listOfPoints
             
-def createSprings(): # function to create springs between the points that have a resting distance
+def createSprings(listOfPoints, SPRINGLIMIT): # function to create springs between a list of points that have a resting distance
     '''
     ## createSprings()
-    Function for creating springs between the points. Uses the global variable `SPRINGLIMIT` to control which point pairs get springs.
+    Function for creating springs between points. Takes in a list of points and outputs indices of all the springs that are generated.
     '''
+    generatedSprings = []
     for pointIndex1 in range(len(listOfPoints)):
         for pointIndex2 in range(len(listOfPoints)):
             if pointIndex1 != pointIndex2:
                 if dist(listOfPoints[pointIndex1], listOfPoints[pointIndex2]) < SPRINGLIMIT:
-                    springs.append([pointIndex1, pointIndex2, dist(listOfPoints[pointIndex1], listOfPoints[pointIndex2])])
+                    if listOfPoints[pointIndex1][1] > height/2 and listOfPoints[pointIndex2][1] > height/2:
+                        generatedSprings.append([pointIndex1, pointIndex2, dist(listOfPoints[pointIndex1], listOfPoints[pointIndex2]), "road"])
+                    else:
+                        generatedSprings.append([pointIndex1, pointIndex2, dist(listOfPoints[pointIndex1], listOfPoints[pointIndex2]), "wood"])
+
+    return generatedSprings
 
 
-
-def transformPoint(index): # master function to transform a point
+def transformPoint(index, localListOfPoints, springsList, internalAcceleration, isObject=False): # master function to transform a point
     '''
     ## transformPoint()
-    Master function for transforming points. Takes in a point index and outputs an updated point coordinate.
+    Master function for transforming points. Takes in a point index, list of connected points, etc. and outputs an updated point coordinate.
     '''
     position = [0,0]
     velocity = [0,0]
-    [position[0], position[1], velocity[0], velocity[1], fixed] = listOfPoints[index]
+    #print(listOfPoints)
+    [position[0], position[1], velocity[0], velocity[1], fixed] = localListOfPoints[index]
     #position = addVectors([position, [random.randint(-1,1), random.randint(-1,1)]])\
     acceleration = [0, 0]
-    acceleration = addVectors([acceleration, GRAVITY])
+    acceleration = addVectors([acceleration, internalAcceleration])
 
     if position[1] >= 550:
-        acceleration = addVectors([acceleration, [0, (-position[1] + 550) * 1]])
+        position[1] = 550
+        velocity[1] -= velocity[1] * 2
+        #acceleration = addVectors([acceleration, [0, (-position[1] + 550) * 2]])
 
-    for spring in springs: # spring force calculation
+    for spring in springsList: # spring force calculation
         if index in spring[0:2]:
             if spring[1] == index: # checks to see if the spring has our current point on one of its ends
-                direction = dirTo(listOfPoints[spring[0]][0:2], listOfPoints[spring[1]][0:2])
+                direction = dirTo(localListOfPoints[spring[0]][0:2], localListOfPoints[spring[1]][0:2])
             else:
-                direction = dirTo(listOfPoints[spring[1]][0:2], listOfPoints[spring[0]][0:2])
-            distance = dist(listOfPoints[spring[0]][0:2], listOfPoints[spring[1]][0:2])
+                direction = dirTo(localListOfPoints[spring[1]][0:2], localListOfPoints[spring[0]][0:2])
+            distance = dist(localListOfPoints[spring[0]][0:2], localListOfPoints[spring[1]][0:2])
             springVector = [(cos(direction) * STIFFNESS * (spring[2] - distance)), (sin(direction) * STIFFNESS * (spring[2] - distance))] # converts polar to rect
             acceleration = addVectors([acceleration, springVector])
-    for index2 in range(len(listOfPoints)): # "close pressure" calculation, inspired off of some other people's designs that did something similar to push close particles apart
+    for index2 in range(len(localListOfPoints)): # "close pressure" calculation, inspired off of some other people's designs that did something similar to push close particles apart
         if index2 != index:
-            distance = dist(position, listOfPoints[index2][0:2])
-            direction = dirTo(position, listOfPoints[index2][0:2])
+            distance = dist(position, localListOfPoints[index2][0:2])
+            direction = dirTo(position, localListOfPoints[index2][0:2])
             if distance < CLOSELIMIT + 5:
-                closePressure = 1 / (dist(listOfPoints[spring[1]][0:2], listOfPoints[spring[0]][0:2]) - CLOSELIMIT) - 1/5
+                closePressure = 1 / (dist(localListOfPoints[spring[1]][0:2], localListOfPoints[spring[0]][0:2]) - CLOSELIMIT) - 1/5
                 closeVector = [cos(direction) * closePressure, sin(direction) * closePressure]
                 acceleration = addVectors([acceleration, closeVector])
+
+    if isObject:
+        for index2 in range(len(springs)):
+            #print([listOfPoints[springs[index2][end]][:2] for end in range(2)])
+            firstLine = [localListOfPoints[springsList[index][end]][:2] for end in range(2)]
+            secondLine = [listOfPoints[springs[index2][end]][:2] for end in range(2)]
+            intersection = getIntersectionPoint(firstLine, secondLine)
+            
+            if intersection != None:
+                if intersection[0] > min(firstLine[0][0], firstLine[1][0]) and intersection[0] < max(firstLine[0][0], firstLine[1][0]): # bounding box check so that collisions happen only when the intersection point is in the bounding box of both line segments
+                    if intersection[0] > min(secondLine[0][0], secondLine[1][0]) and intersection[0] < max(secondLine[0][0], secondLine[1][0]):
+                        if intersection[1] > min(firstLine[0][1], firstLine[1][1]) and intersection[1] < max(firstLine[0][1], firstLine[1][1]):
+                            if intersection[1] > min(secondLine[0][1], secondLine[1][1]) and intersection[1] < max(secondLine[0][1], secondLine[1][1]):
+                                pygame.draw.line(screen, [0, 255, 0], secondLine[0], secondLine[1], 5)
+                                pygame.draw.circle(screen, [255,0,0], intersection, 5)
+                                #collision = True
+                                #angle = atan((secondLine[1][1] - secondLine[0][1]) / (secondLine[1][0] - secondLine[0][0]))
+                                #print(50 * sin(angle + pi/2))
+                                
+                                #position[1] -= 0.1
+                                #magnitude = sqrt(acceleration[0]**2 + acceleration[1]**2)
+                                #acceleration[1] -= 10 * cos(angle)
+                                #acceleration[0] += 10 * sin(angle)
+                                
+                                #acceleration[1] -= 50
+                                #None
+
 
     acceleration = [axis * SIMSPEED for axis in acceleration]
     velocity = addVectors([velocity, acceleration])
@@ -166,33 +246,72 @@ def transformPoint(index): # master function to transform a point
     pointInformation = [position[0], position[1], velocity[0], velocity[1], fixed]
     return pointInformation
 
+def createObjects():
+    ## Location, Initial Velocity
+    CENTER = random.randint(300, 900), 100
+    SIZE = 50
+    objects.append([[CENTER[0] - SIZE, CENTER[1] - SIZE, 55, -5, False],
+                   [CENTER[0] + SIZE, CENTER[1] - SIZE, 0, -5, False],
+                   [CENTER[0] + SIZE, CENTER[1] + SIZE, -55, -5, False],
+                   [CENTER[0] - SIZE, CENTER[1] + SIZE, 0, -5, False]])
+    for object in objects:
+        objectSprings.append(createSprings(object, 150))
+
+def transformObjects():
+    global objects
+    for index in range(len(objects)):
+        #print(objects)
+        newObjects = copy.deepcopy(objects)
+        object = objects[index] # `object` contains the point informations in the object
+        for index2 in range(len(object)): # index2 is the index of the point within the object
+            newObjects[index][index2] = transformPoint(index2, copy.copy(object), copy.copy(objectSprings[index]), GRAVITY, isObject=True)[:5]
+    
+    objects = copy.deepcopy(newObjects)
+
 ###### MAINLOOP ######
 initializePoints()
-createSprings()
+springs = createSprings(listOfPoints, SPRINGLIMIT)
+createObjects()
 selected = None
 running = True # Runs the game loop
 while running:
     screen.fill((255, 255, 255))
 
-    for point in listOfPoints:
+    for index in range(len(chasePoints)):
+        chasePoints[index][0] += (listOfPoints[index][0] - chasePoints[index][0]) * 0.4
+        chasePoints[index][1] += (listOfPoints[index][1] - chasePoints[index][1]) * 0.4
+
+    for point in chasePoints:
         pygame.draw.circle(screen, (150, 150, 150), point[0:2], 7)
         pygame.draw.circle(screen, (0,0,0), point[0:2], 4)
+    
+    for object in objects:
+        pygame.draw.polygon(screen, (90, 90, 90), [point[:2] for point in object])
+
     
     numDestructions = 0 # Hard Limit : Only one structure breakage per frame
     for spring in springs:
         stress = abs((dist(listOfPoints[spring[0]], listOfPoints[spring[1]]) - spring[2]))
-        if stress > 20 and numDestructions <= 1:
+        if stress > 5 and numDestructions <= 1:
             listOfPoints.append(copy.copy(listOfPoints[spring[0]]))
             listOfPoints.append(copy.copy(listOfPoints[spring[1]]))
-            springs.append([len(listOfPoints) - 2, len(listOfPoints) - 1, copy.copy(spring[2])])
+            springs.append([len(listOfPoints) - 2, len(listOfPoints) - 1, copy.copy(spring[2]), spring[3]])
             springs.remove(spring)
+            chasePoints.append(copy.copy(listOfPoints[spring[0]]))
+            chasePoints.append(copy.copy(listOfPoints[spring[1]]))
             numDestructions += 1
-        red = int(clamp(0 + 8 * stress, [0, 255]))
-        pygame.draw.aaline(screen, (red, 0, 0), listOfPoints[spring[0]][0:2], listOfPoints[spring[1]][0:2])
+        red = int(clamp(0 + 8 * stress, [0, 255])) / 255 # represents the amount of red that should be visible based on stress
+        redColor = [255, 0, 0]
+        if spring[3] == "road":
+            pygame.draw.line(screen, colorLerp([30, 30, 30], redColor, red), chasePoints[spring[0]][0:2], chasePoints[spring[1]][0:2], 5)
+        elif spring[3] == "wood":
+            pygame.draw.line(screen, colorLerp([190, 110, 60], redColor, red), chasePoints[spring[0]][0:2], chasePoints[spring[1]][0:2], 5)
     if numDestructions != 0:
         springs.pop()
         listOfPoints.pop()
         listOfPoints.pop()
+        chasePoints.pop()
+        chasePoints.pop()
     newListOfPoints = copy.deepcopy(listOfPoints)
 
     for event in pygame.event.get(): # checks if program is quit, if so stops the code
@@ -200,8 +319,9 @@ while running:
             running = False
     
     for frame in range(fpsMultiplier):
+        transformObjects()
         for point in range(len(listOfPoints)):
-            newListOfPoints[point] = transformPoint(point)
+            newListOfPoints[point] = transformPoint(point, listOfPoints, springs, GRAVITY)
 
             if dist(listOfPoints[point], pygame.mouse.get_pos()) < 8 and selected == None and pygame.mouse.get_pressed()[0]:
                 selected = point
