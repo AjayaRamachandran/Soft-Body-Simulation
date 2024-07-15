@@ -49,14 +49,14 @@ denominator = 0
 elasticStrength = 0.5
 
 # test ground state
-#lineLibrary.append((0, 700, 1280, 700))
+lineLibrary.append((0, 700, 1280, 700))
 
 # Left Half Platform
 #lineLibrary.append((0, 600, 640, 600))
 #lineLibrary.append((640, 600, 700, 720))
 
 # Tilt to Left
-lineLibrary.append((0, 720, 1280, 550))
+#lineLibrary.append((0, 720, 1280, 550))
 
 # Tilt to Right
 #lineLibrary.append((0, 550, 1280, 720))
