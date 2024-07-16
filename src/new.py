@@ -44,16 +44,22 @@ newListOfPoints = []
 chasePoints = []
 springs = []
 
-objects = []
-newObjects = []
-objectSprings = []
-
 things = []
 newThings = []
 
 oldMouse = pygame.mouse.get_pos()
 mode = "test"
 editor = True
+
+materials = [
+    "wood",
+    "road"
+]
+
+tools = [
+    "move",
+    "add"
+]
 
 ###### OPERATOR FUNCTIONS ######
 
@@ -146,12 +152,16 @@ def initializePoints(): # function to create the points in a grid setup
                 listOfPoints.append([width/2 + x*SPACING, height/2 + y*SPACING, 0, 0, False, 1])
         chasePoints = copy.deepcopy(listOfPoints)
     else:
-        listOfPoints.append([width/2 - 250, height/2 + 50, 0, 0, True, 1])
-        for truss in range(1,6):
-            if not truss == 5:
-                listOfPoints.append([width/2 - 250 + (truss)*100, height/2 + 50, 0, 0, False, 1])
-            listOfPoints.append([width/2 - 250 + (truss - 0.5)*100, height/2 - 50, 0, 0, False, 1])
-        listOfPoints.append([width/2 + 250, height/2 + 50, 0, 0, True, 1])
+        if editor:
+            listOfPoints.append([width/2 - 250, height/2 + 50, 0, 0, True, 1])
+            listOfPoints.append([width/2 + 250, height/2 + 50, 0, 0, True, 1])
+        else:
+            listOfPoints.append([width/2 - 250, height/2 + 50, 0, 0, True, 1])
+            for truss in range(1,6):
+                if not truss == 5:
+                    listOfPoints.append([width/2 - 250 + (truss)*100, height/2 + 50, 0, 0, False, 1])
+                listOfPoints.append([width/2 - 250 + (truss - 0.5)*100, height/2 - 50, 0, 0, False, 1])
+            listOfPoints.append([width/2 + 250, height/2 + 50, 0, 0, True, 1])
         chasePoints = copy.deepcopy(listOfPoints)
     #listOfPoints.append([width/2, height/2, 0, -1])
     #listOfPoints.append([width/2, height/2 + SPACING, 0, 1])
@@ -229,6 +239,10 @@ def transformPoint(index, localListOfPoints, springsList, internalAcceleration, 
     return pointInformation
 
 def createThings():
+    '''
+    ## createThings()
+    Function for creating objects that interact with the scene. Ex: Cars
+    '''
     ## Location, Initial Velocity
     #CENTER = random.randint(300, 900), 100
     CENTER = width/2 - 150, height/2 + 50
@@ -236,18 +250,11 @@ def createThings():
 
     things.append([CENTER[0] - SIZE, CENTER[1] - SIZE, 0, 0, 30, 50, [0.3, 2]])
 
-def transformObjects():
-    global objects
-    for index in range(len(objects)):
-        #print(objects)
-        newObjects = copy.deepcopy(objects)
-        object = objects[index] # `object` contains the point informations in the object
-        for index2 in range(len(object)): # index2 is the index of the point within the object
-            newObjects[index][index2] = transformPoint(index2, copy.copy(object), copy.copy(objectSprings[index]), GRAVITY, isObject=True)[:6]
-    
-    objects = copy.deepcopy(newObjects)
-
 def transformThings():
+    '''
+    ## transformThings()
+    Master function for transforming objects.
+    '''
     global things, dt
     for index in range(len(things)):
         position = [0,0]
@@ -293,70 +300,111 @@ def transformThings():
 
 ###### MAINLOOP ######
 initializePoints()
-springs = createSprings(listOfPoints, SPRINGLIMIT)
-createThings()
+#springs = createSprings(listOfPoints, SPRINGLIMIT)
+#createThings()
 selected = None
 running = True # Runs the game loop
+
+### EDITOR
+tool = "add"
+material = "wood"
+
 while running:
     screen.fill((255, 255, 255))
 
+    ### INTERPOLATOR
     for index in range(len(chasePoints)):
         chasePoints[index][0] += (listOfPoints[index][0] - chasePoints[index][0]) * 0.4
         chasePoints[index][1] += (listOfPoints[index][1] - chasePoints[index][1]) * 0.4
-
+    ### DRAWS POINTS TO SCREEN
     for point in chasePoints:
         pygame.draw.circle(screen, (150, 150, 150), point[0:2], 7)
         pygame.draw.circle(screen, (0,0,0), point[0:2], 4)
-    
-    for object in objects:
-        pygame.draw.polygon(screen, (90, 90, 90), [point[:2] for point in object])
-
+    ### DRAWS OBJECTS TO SCREEN
     for thing in things:
         pygame.draw.circle(screen, [90, 90, 90], thing[:2], thing[5])
-    
-    numDestructions = 0 # Hard Limit : Only one structure breakage per frame
-    for spring in springs:
-        stress = abs((dist(listOfPoints[spring[0]], listOfPoints[spring[1]]) - spring[2]))
-        if stress > 5 and numDestructions <= 1:
-            listOfPoints.append(copy.copy(listOfPoints[spring[0]]))
-            listOfPoints.append(copy.copy(listOfPoints[spring[1]]))
-            springs.append([len(listOfPoints) - 2, len(listOfPoints) - 1, copy.copy(spring[2]), spring[3]])
-            springs.remove(spring)
-            chasePoints.append(copy.copy(listOfPoints[spring[0]]))
-            chasePoints.append(copy.copy(listOfPoints[spring[1]]))
-            numDestructions += 1
-        red = int(clamp(0 + 220 * stress, [0, 255])) / 255 # represents the amount of red that should be visible based on stress
-        redColor = [255, 0, 0]
-        if spring[3] == "road":
-            pygame.draw.line(screen, colorLerp([30, 30, 30], redColor, red), chasePoints[spring[0]][0:2], chasePoints[spring[1]][0:2], 5)
-        elif spring[3] == "wood":
-            pygame.draw.line(screen, colorLerp([60, 60, 60], redColor, red), chasePoints[spring[0]][0:2], chasePoints[spring[1]][0:2], 5)
-    if numDestructions != 0:
-        springs.pop()
-        listOfPoints.pop()
-        listOfPoints.pop()
-        chasePoints.pop()
-        chasePoints.pop()
-    newListOfPoints = copy.deepcopy(listOfPoints)
+
+    if editor:
+        if material == "wood":
+            pygame.draw.rect(screen, [110, 70, 30], [[10,10], [50, 50]], border_radius=10)
+        elif material == "road":
+            pygame.draw.rect(screen, [30, 30, 30], [[10,10], [50, 50]], border_radius=10)
+
+        ### DRAWS SPRINGS TO SCREEN
+        for spring in springs:
+            if spring[3] == "road":
+                pygame.draw.line(screen, [30, 30, 30], chasePoints[spring[0]][0:2], chasePoints[spring[1]][0:2], 5)
+            elif spring[3] == "wood":
+                pygame.draw.line(screen, [60, 60, 60], chasePoints[spring[0]][0:2], chasePoints[spring[1]][0:2], 5)
+
+        for point in range(len(listOfPoints)):
+            if dist(listOfPoints[point], pygame.mouse.get_pos()) < 8 and selected == None and pygame.mouse.get_pressed()[0]:
+                selected = point
+            if selected == point:
+                if tool == "move":
+                    newListOfPoints[point][0:2] = pygame.mouse.get_pos()
+                    chasePoints = copy.deepcopy(newListOfPoints)
+                    listOfPoints = copy.deepcopy(newListOfPoints)
+                elif tool == "add":
+                    newListOfPoints.append(copy.copy(newListOfPoints[point]))
+                    selected = len(newListOfPoints) - 1
+                    springs.append([selected, point, 0, material])
+                    tool = "move"
+                    chasePoints = copy.deepcopy(newListOfPoints)
+                    listOfPoints = copy.deepcopy(newListOfPoints)
+
+    else:
+        ### DRAWS SPRINGS TO SCREEN WITH STRESS DYNAMICS
+        numDestructions = 0 # Hard Limit : Only one structure breakage per frame
+        for spring in springs:
+            stress = abs((dist(listOfPoints[spring[0]], listOfPoints[spring[1]]) - spring[2]))
+            if stress > 5 and numDestructions <= 1:
+                listOfPoints.append(copy.copy(listOfPoints[spring[0]]))
+                listOfPoints.append(copy.copy(listOfPoints[spring[1]]))
+                springs.append([len(listOfPoints) - 2, len(listOfPoints) - 1, copy.copy(spring[2]), spring[3]])
+                springs.remove(spring)
+                chasePoints.append(copy.copy(listOfPoints[spring[0]]))
+                chasePoints.append(copy.copy(listOfPoints[spring[1]]))
+                numDestructions += 1
+            red = int(clamp(0 + 220 * stress, [0, 255])) / 255 # represents the amount of red that should be visible based on stress
+            redColor = [255, 0, 0]
+            if spring[3] == "road":
+                pygame.draw.line(screen, colorLerp([30, 30, 30], redColor, red), chasePoints[spring[0]][0:2], chasePoints[spring[1]][0:2], 5)
+            elif spring[3] == "wood":
+                pygame.draw.line(screen, colorLerp([60, 60, 60], redColor, red), chasePoints[spring[0]][0:2], chasePoints[spring[1]][0:2], 5)
+        if numDestructions != 0:
+            springs.pop()
+            listOfPoints.pop()
+            listOfPoints.pop()
+            chasePoints.pop()
+            chasePoints.pop()
+        newListOfPoints = copy.deepcopy(listOfPoints)
+        
+        for frame in range(fpsMultiplier):
+            #transformObjects()
+            transformThings()
+            for point in range(len(listOfPoints)):
+                newListOfPoints[point] = transformPoint(point, listOfPoints, springs, GRAVITY)
+
+                if dist(listOfPoints[point], pygame.mouse.get_pos()) < 8 and selected == None and pygame.mouse.get_pressed()[0]:
+                    selected = point
+                if selected == point:
+                    newListOfPoints[point][0:2] = pygame.mouse.get_pos()
+                    newListOfPoints[point][2:4] = [(pygame.mouse.get_pos()[axis] - oldMouse[axis])*SIMSPEED for axis in range(2)]
+            listOfPoints = copy.deepcopy(newListOfPoints)
+        oldMouse = pygame.mouse.get_pos()
 
     for event in pygame.event.get(): # checks if program is quit, if so stops the code
         if event.type == pygame.QUIT:
             running = False
-    
-    for frame in range(fpsMultiplier):
-        #transformObjects()
-        transformThings()
-        for point in range(len(listOfPoints)):
-            newListOfPoints[point] = transformPoint(point, listOfPoints, springs, GRAVITY)
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_RIGHT:
+                material = materials[(materials.index(material) + 1) % len(materials)]
+                print(material)
+            if event.key == pygame.K_SPACE:
+                tool = tools[(tools.index(tool) + 1) % len(tools)]
+                print(tool)
 
-            if dist(listOfPoints[point], pygame.mouse.get_pos()) < 8 and selected == None and pygame.mouse.get_pressed()[0]:
-                selected = point
-            if selected == point:
-                newListOfPoints[point][0:2] = pygame.mouse.get_pos()
-                newListOfPoints[point][2:4] = [(pygame.mouse.get_pos()[axis] - oldMouse[axis])*SIMSPEED for axis in range(2)]
-        listOfPoints = copy.deepcopy(newListOfPoints)
-    oldMouse = pygame.mouse.get_pos()
-    
     if not pygame.mouse.get_pressed()[0]:
         selected = None
     # runs framerate wait time
@@ -365,13 +413,13 @@ while running:
     pygame.display.update()
     #time.sleep(1)
 
-    
+    '''
     if pygame.key.get_pressed()[pygame.K_RIGHT]:
         SIMSPEED *= 0.909
         print(SIMSPEED)
     if pygame.key.get_pressed()[pygame.K_LEFT]:
         SIMSPEED *= 1.1
         print(SIMSPEED)
-
+'''
 # quit Pygame
 pygame.quit()
