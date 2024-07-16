@@ -40,14 +40,15 @@ def getIntersectionPoint(line1, line2):
         return None  # No intersection (lines are parallel)
 
     t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / denominator
+    u = -((x1 - x2) * (y1 - y3) - (y1 - y2) * (x1 - x3)) / denominator
 
     x = x1 + t * (x2 - x1)
     y = y1 + t * (y2 - y1)
 
-    if 0 <= t <= 1:
+    if 0 <= t <= 1 and 0 <= u <= 1:
         return (x, y)  # Return the intersection point
     else:
-        return (x, y) # No intersection within line segments (lines are not parallel, but they don't intersect in the specified segments)
+        return None, None # No intersection within line segments (lines are not parallel, but they don't intersect in the specified segments)
     
 ###### INITIALIZE ######
 
